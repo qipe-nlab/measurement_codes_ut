@@ -142,7 +142,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
             for name, lo in self.lo.items():
-                if "Rohde" in self.lo_info[name]['model']:
+                if "SGS" in self.lo_info[name]['model']:
                     lo.on()
                 else:
                     lo.output(True)
@@ -195,7 +195,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             for dig in self.digitizer_ch.values():
                 dig.stop()
             for name, lo in self.lo.items():
-                if "Rohde" in self.lo_info[name]['model']:
+                if "SGS" in self.lo_info[name]['model']:
                     lo.on()
                 else:
                     lo.output(False)

@@ -3,7 +3,7 @@ from logging import getLogger
 
 import numpy as np
 import qcodes as qc
-from qcodes.instrument_drivers.rohde_schwarz.Rohde_Schwarz_ZNB20 import RohdeSchwarzZNB20
+from qcodes.instrument_drivers.rohde_schwarz.SGS100A import RohdeSchwarz_SGS100A
 from qcodes_drivers.E82x7 import E82x7
 from qcodes_drivers.N51x1 import N51x1
 from qcodes_drivers.HVI_Trigger import HVI_Trigger
@@ -19,9 +19,7 @@ from qcodes_drivers.E4407B import E4407B
 import matplotlib.pyplot as plt
 
 from measurement_codes_ut.measurement_tool import Session
-from measurement_codes_ut.measurement_tool.iq_corrector.iq_corrector import IQCorrector
-from measurement_codes_ut.measurement_tool.iq_corrector.iq_corrector_db import IQCorrector as IQCorrectorDB
-
+from qcodes_drivers.iq_corrector import IQCorrector
 
 logger = getLogger(__name__)
 
@@ -114,6 +112,7 @@ class InstrumentManagerBase(object):
         self.lo_info['channel'].append("")
         self.lo_info['port'].append(port_name)
         lo_dummy.close()
+        # print(model)
         if lo_address not in self.lo_address.values():
             if "E82" in model:
                 lo = E82x7(f"lo_{self.lo_id}", lo_address)
@@ -121,8 +120,8 @@ class InstrumentManagerBase(object):
             elif "N51" in model:
                 lo = N51x1(f"lo_{self.lo_id}", lo_address)
                 lo.output(False)
-            elif "Rohde" in model:
-                lo = RohdeSchwarzZNB20(f"lo_{self.lo_id}", lo_address)
+            elif "SGS" in model:
+                lo = RohdeSchwarz_SGS100A(f"lo_{self.lo_id}", lo_address)
                 lo.off()
 
             lo.power(lo_power)
@@ -156,26 +155,15 @@ class InstrumentManagerBase(object):
             if IQ_corrector is None:
                 self.IQ_corrector[port_name] = None
             else:
-                if 'style' in IQ_corrector:
-                    self.IQ_corrector[port_name] = IQCorrectorDB(
-                        awg_ch[0],
-                        awg_ch[1],
-                        IQ_corrector["dataset_path"],
-                        lo_leakage_id=IQ_corrector["lo_leakage_id"],
-                        rf_power_id=IQ_corrector["rf_power_id"],
-                        len_kernel=41,
-                        fit_weight=10,
-                    )
-                else:
-                    self.IQ_corrector[port_name] = IQCorrector(
-                        awg_ch[0],
-                        awg_ch[1],
-                        IQ_corrector["calibration_path"],
-                        lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
-                        rf_power_datetime=IQ_corrector["rf_power_datetime"],
-                        len_kernel=41,
-                        fit_weight=10,
-                    )
+                self.IQ_corrector[port_name] = IQCorrector(
+                    awg_ch[0],
+                    awg_ch[1],
+                    IQ_corrector["calibration_path"],
+                    lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
+                    rf_power_datetime=IQ_corrector["rf_power_datetime"],
+                    len_kernel=41,
+                    fit_weight=10,
+                )
             self.awg_id += 1
 
         else:
@@ -317,26 +305,15 @@ class InstrumentManagerBase(object):
         self.spectrum_analyzer = spectrum_analyzer
 
     def add_iq_corrector(self, IQ_corrector, port_name, awg_channel):
-        if 'style' in IQ_corrector:
-            self.IQ_corrector[port_name] = IQCorrectorDB(
-                awg_channel[0],
-                awg_channel[1],
-                IQ_corrector["dataset_path"],
-                lo_leakage_id=IQ_corrector["lo_leakage_id"],
-                rf_power_id=IQ_corrector["rf_power_id"],
-                len_kernel=41,
-                fit_weight=10,
-            )
-        else:
-            self.IQ_corrector[port_name] = IQCorrector(
-                awg_channel[0],
-                awg_channel[1],
-                IQ_corrector["calibration_path"],
-                lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
-                rf_power_datetime=IQ_corrector["rf_power_datetime"],
-                len_kernel=41,
-                fit_weight=10,
-            )
+        self.IQ_corrector[port_name] = IQCorrector(
+            awg_channel[0],
+            awg_channel[1],
+            IQ_corrector["calibration_path"],
+            lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
+            rf_power_datetime=IQ_corrector["rf_power_datetime"],
+            len_kernel=41,
+            fit_weight=10,
+        )
 
         self.awg_ch[port_name][1] = awg_channel
 
