@@ -30,7 +30,7 @@ class CalibrateIQMixer(object):
                  reference_level_rf=0,  # dBm
                  reference_level_leakage=-30,  # dBm
                  i_amp=0.5, ):
-        self.dataset = []
+        self.dataset = {}
         self.target_port = target_port
         self.target_channel = target_channel
         assert 1000 % if_step == 0
@@ -157,7 +157,7 @@ class CalibrateIQMixer(object):
             print(f"lo_leakage saved in {data_path_all}")
             dataset = datadict_from_hdf5(data_path_all+"data")
             self.lo_leakage_path = data_path[:17]
-            self.dataset.append(dataset)
+            self.dataset['lo_leakage'] = dataset
 
     def output_if(self, if_freq: int, i_amp: float, q_amp: float, theta: float):
         t = np.arange(1000) / 1000
@@ -306,7 +306,7 @@ class CalibrateIQMixer(object):
             print(f"rf_power data saved in {data_path_all}")
             dataset = datadict_from_hdf5(data_path_all+"data")
             self.rf_power_path = data_path[:17]
-            self.dataset.append(dataset)
+            self.dataset['rf_power'] = dataset
 
     def iq_mixer_check(self, tdm):
         iq_corrector = IQCorrector(
@@ -336,3 +336,13 @@ class CalibrateIQMixer(object):
             amps=np.linspace(0.1, 1.4, 14),
             reference_level=0,  # dBm
         )
+        files = os.listdir(tdm.save_path)
+        date = files[-1] + '/'
+        files = os.listdir(tdm.save_path+date)
+        data_path = files[-1]
+
+        data_path_all = tdm.save_path+date+data_path + '/'
+
+        print(f"IQ mixer check data saved in {data_path_all}")
+        dataset = datadict_from_hdf5(data_path_all+"data")
+        self.dataset['mixer_check'] = dataset
