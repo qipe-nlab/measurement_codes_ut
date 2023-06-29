@@ -7,7 +7,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -85,7 +85,7 @@ class OptimizeReadoutPowerAndWindow(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         amp_range = np.linspace(
             self.min_amplitude, self.max_amplitude, self.num_point)
@@ -138,7 +138,7 @@ class OptimizeReadoutPowerAndWindow(object):
         self.data_path_all = tdm.save_path+date+self.data_path + '/'
 
         dataset = datadict_from_hdf5(self.data_path_all+"data")
-        
+
         print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 

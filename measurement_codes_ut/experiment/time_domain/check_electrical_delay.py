@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 import time
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -58,7 +58,6 @@ class CheckElectricalDelay(object):
         acq_port = tdm.acquire_port['readout_acquire']
         qubit_port = tdm.port['qubit'].port
 
-        
         ports = [readout_port, qubit_port, acq_port]
 
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)

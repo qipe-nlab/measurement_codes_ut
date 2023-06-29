@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 from measurement_codes_ut.util import LPF
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -76,7 +76,7 @@ class OptimizeHalfPiAmp(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 
@@ -92,9 +92,9 @@ class OptimizeHalfPiAmp(object):
                 rx90 = Sequence(ports)
                 with rx90.align(qubit_port, 'left'):
                     rx90.add(Gaussian(amplitude=amp, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                                qubit_port, copy=False)
+                             qubit_port, copy=False)
                     rx90.add(Deriviative(Gaussian(amplitude=1j*amp*note.half_pi_pulse_drag, fwhm=half_pi_pulse_length /
-                                              3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
+                                                  3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
                 for _ in range(4*self.rep):
                     seq.call(rx90)
 
@@ -195,4 +195,4 @@ class OptimizeHalfPiAmp(object):
         experiment_note = AttributeDict()
         experiment_note.half_pi_pulse_power = self.hpi_center
         note.add_experiment_note(self.__class__.experiment_name,
-                                    experiment_note, self.__class__.output_parameters)
+                                 experiment_note, self.__class__.output_parameters)

@@ -7,7 +7,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -82,7 +82,7 @@ class CheckT1Decay(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 

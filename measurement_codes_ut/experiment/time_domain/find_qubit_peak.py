@@ -6,7 +6,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -101,7 +101,7 @@ class FindQubitPeak(object):
             tdm.prepare_experiment(writer, __file__)
             for i, df in enumerate(tqdm(shift)):
                 time.sleep(1e-1)
-                tdm.port['qubit'].frequency = qubit_freq + df 
+                tdm.port['qubit'].frequency = qubit_freq + df
                 raw_data = tdm.run(
                     seq, averaging_waveform=True, averaging_shot=True, as_complex=False)
                 writer.add_data(

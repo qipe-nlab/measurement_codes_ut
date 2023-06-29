@@ -6,7 +6,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -59,7 +59,6 @@ class CreatePiPulse(object):
         note = calibaration_note.get_calibration_parameters(
             self.__class__.experiment_name, self.__class__.input_parameters)
 
-        
         readout_port = tdm.port['readout'].port
         acq_port = tdm.acquire_port['readout_acquire']
         qubit_port = tdm.port['qubit'].port
@@ -76,7 +75,7 @@ class CreatePiPulse(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         rabi_period = (1./note.rabi_frequency)
         time_ratio = float(rabi_period / note.pi_pulse_length) * 3

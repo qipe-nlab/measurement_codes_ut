@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 from measurement_codes_ut.util import LPF
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -75,10 +75,9 @@ class OptimizeHalfPiDRAG(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
-
 
         half_pi_pulse_power = note.half_pi_pulse_power
         half_pi_pulse_length = note.pi_pulse_length * 0.5
@@ -93,10 +92,10 @@ class OptimizeHalfPiDRAG(object):
                 rx90 = Sequence(ports)
                 with rx90.align(qubit_port, 'left'):
                     rx90.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                            qubit_port, copy=False)
+                             qubit_port, copy=False)
                     rx90.add(Deriviative(Gaussian(amplitude=1j*half_pi_pulse_power*drag, fwhm=half_pi_pulse_length /
-                                                3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
-                
+                                                  3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
+
                 seq.call(rx90)
                 for _ in range(self.rep):
                     seq.call(rx90)

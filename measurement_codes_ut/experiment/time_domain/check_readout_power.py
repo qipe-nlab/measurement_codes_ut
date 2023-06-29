@@ -6,7 +6,7 @@ import matplotlib.pyplot as plt
 from plottr.data.datadict_storage import DataDict, DDH5Writer
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Sequence
 from sequence_parser.instruction import *
 

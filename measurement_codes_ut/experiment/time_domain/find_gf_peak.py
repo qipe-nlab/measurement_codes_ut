@@ -7,7 +7,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from sklearn.decomposition import PCA
 from tqdm import tqdm
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
+from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
@@ -77,7 +77,7 @@ class FindGFPeak(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq 
+        tdm.port['qubit'].frequency = qubit_freq
 
         expected_qubit_frequency_gf = note.qubit_dressed_frequency + \
             self.expected_anharmonicity / 2.
@@ -105,7 +105,7 @@ class FindGFPeak(object):
             tdm.prepare_experiment(writer, __file__)
             for i, df in enumerate(tqdm(shift)):
                 time.sleep(0.1)
-                tdm.port['qubit'].frequency = expected_qubit_frequency_gf + df 
+                tdm.port['qubit'].frequency = expected_qubit_frequency_gf + df
                 raw_data = tdm.run(seq, averaging_shot=True,
                                    averaging_waveform=True, as_complex=False)
                 writer.add_data(

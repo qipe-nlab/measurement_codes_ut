@@ -8,7 +8,6 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 import time
 
-from measurement_code_ut.measurement_tool.wrapper import AttributeDict
 from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
