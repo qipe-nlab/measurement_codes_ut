@@ -8,13 +8,12 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 import time
 
-from sequence_parser import Port, Sequence, Circuit
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
 from plottr.data.datadict_storage import datadict_from_hdf5
 from scipy.optimize import minimize
-from measurement_codes_ut.measurement_tool.iq_corrector.iq_corrector import IQCorrector
+from qcodes_drivers.iq_corrector import IQCorrector
 
 logger = getLogger(__name__)
 
@@ -25,7 +24,6 @@ class CalibrateIQMixer(object):
     def __init__(self,
                  target_port: str,
                  target_channel: tuple,
-                 lo_freq: float,  # Hz
                  if_lo: int,  # MHz
                  if_hi: int,  # MHz
                  if_step: int,  # MHz
@@ -35,7 +33,6 @@ class CalibrateIQMixer(object):
         self.dataset = []
         self.target_port = target_port
         self.target_channel = target_channel
-        self.lo_freq = lo_freq
         assert 1000 % if_step == 0
         assert if_lo % if_step == 0
         assert if_hi % if_step == 0
@@ -55,7 +52,6 @@ class CalibrateIQMixer(object):
         tdm.spectrum_analyzer.video_bandwidth(1e4)  # Hz
         tdm.spectrum_analyzer.reference_level(
             self.reference_level_leakage)  # dBm
-        tdm.spectrum_analyzer.center(self.lo_freq)
 
         self.awg_index = tdm.awg_ch[self.target_port][0]
         self.awg = tdm.awg[self.awg_index]
@@ -65,10 +61,12 @@ class CalibrateIQMixer(object):
                                           ], ref_dict[self.target_channel[1]]
 
         lo = tdm.lo[self.target_port]
-        if "Rohde" in lo.IDN()['model']:
-            lo.on()
-        else:
+        self.lo_freq = lo.frequency()
+        tdm.spectrum_analyzer.center(lo.frequency())
+        try:
             lo.output(True)
+        except:
+            lo.on()
         print('Running LO leakage calibration...', end='')
         self.minimize_lo_leakage(tdm)
         print('done')
@@ -84,6 +82,11 @@ class CalibrateIQMixer(object):
             self.iq_mixer_check(tdm)
             print('done')
 
+        try:
+            lo.output(False)
+        except:
+            lo.off()
+
         iq_corrector = IQCorrector(
             self.awg_i,  # awg_q2 or awg2_q2
             self.awg_i,  # awg_i2 or awg2_i2
@@ -97,6 +100,8 @@ class CalibrateIQMixer(object):
         if update_tdm:
             tdm.IQ_corrector[self.target_port] = iq_corrector
             tdm.awg_ch[self.target_port][1] = self.target_channel
+
+        return self.dataset
 
     def minimize_lo_leakage(self, tdm):
 
@@ -112,7 +117,7 @@ class CalibrateIQMixer(object):
         x1 = 0  # initial guess for q_offset
         d = 0.1  # initial step size
 
-        name = f"iq_calibrator lo_leakage slot{self.awg.slot_number()} ch{self.awg_i.channel} ch{self.awg_q.channel}"
+        name = f"iq_calibrator_lo_leakage_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
         with DDH5Writer(data, tdm.save_path, name=name) as writer:
             tdm.prepare_experiment(writer, __file__)
@@ -122,7 +127,7 @@ class CalibrateIQMixer(object):
                 nonlocal iteration
                 self.awg_i.dc_offset(i_offset)
                 self.awg_q.dc_offset(q_offset)
-                dbm = self.spectrum_analyzer.trace_mean()
+                dbm = tdm.spectrum_analyzer.trace_mean()
                 writer.add_data(
                     iteration=iteration,
                     i_offset=i_offset,
@@ -174,11 +179,11 @@ class CalibrateIQMixer(object):
             q(t) = q_amp * sin(2π*if_freq*t + theta)
         are applied to the iq mixer.
         """
-        self.spectrum_analyzer.span(0)  # Hz
-        self.spectrum_analyzer.npts(101)
-        self.spectrum_analyzer.resolution_bandwidth(1e4)  # Hz
-        self.spectrum_analyzer.video_bandwidth(1e4)  # Hz
-        self.spectrum_analyzer.reference_level(
+        tdm.spectrum_analyzer.span(0)  # Hz
+        tdm.spectrum_analyzer.npts(101)
+        tdm.spectrum_analyzer.resolution_bandwidth(1e4)  # Hz
+        tdm.spectrum_analyzer.video_bandwidth(1e4)  # Hz
+        tdm.spectrum_analyzer.reference_level(
             self.reference_level_leakage)  # dBm
 
         data = DataDict(
@@ -198,21 +203,21 @@ class CalibrateIQMixer(object):
         self.q_amps = np.full(len(self.if_freqs), np.nan)
         self.thetas = np.full(len(self.if_freqs), np.nan)
 
-        name = f"iq_calibrator image_sideband slot{self.awg.slot_number()} ch{self.awg_i.channel} ch{self.awg_q.channel}"
+        name = f"iq_calibrator_image_sideband_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
         try:
             with DDH5Writer(data, tdm.save_path, name=name) as writer:
                 tdm.prepare_experiment(writer, __file__)
 
-                for i in range(len(self.if_freqs)):
+                for i in tqdm(range(len(self.if_freqs))):
                     iteration = 0
 
                     def measure(if_freq: int, i_amp: float, q_amp: float, theta: float):
                         nonlocal iteration
                         self.output_if(if_freq, i_amp, q_amp, theta)
-                        self.spectrum_analyzer.center(
+                        tdm.spectrum_analyzer.center(
                             self.lo_freq - if_freq * 1e6)
-                        dbm = self.spectrum_analyzer.trace_mean()
+                        dbm = tdm.spectrum_analyzer.trace_mean()
                         writer.add_data(
                             if_freq=if_freq,
                             iteration=iteration,
@@ -250,12 +255,12 @@ class CalibrateIQMixer(object):
             q(t) = q_amp * sin(2π*if_freq*t + theta)
         are applied to the iq mixer.
         """
-        self.spectrum_analyzer.span(1e9)  # Hz
-        self.spectrum_analyzer.npts(1001)
-        self.spectrum_analyzer.resolution_bandwidth(5e6)  # Hz
-        self.spectrum_analyzer.video_bandwidth(1e4)  # Hz
-        self.spectrum_analyzer.reference_level(self.reference_level_rf)  # dBm
-        self.spectrum_analyzer.center(self.lo_freq)
+        tdm.spectrum_analyzer.span(1e9)  # Hz
+        tdm.spectrum_analyzer.npts(1001)
+        tdm.spectrum_analyzer.resolution_bandwidth(5e6)  # Hz
+        tdm.spectrum_analyzer.video_bandwidth(1e4)  # Hz
+        tdm.spectrum_analyzer.reference_level(self.reference_level_rf)  # dBm
+        tdm.spectrum_analyzer.center(self.lo_freq)
 
         data = DataDict(
             if_freq=dict(unit="MHz"),
@@ -268,18 +273,18 @@ class CalibrateIQMixer(object):
         )
         data.validate()
 
-        name = f"iq_calibrator rf_power slot{self.awg.slot_number()} ch{self.awg_i.channel} ch{self.awg_q.channel}"
+        name = f"iq_calibrator_rf_power_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
         try:
             with DDH5Writer(data, tdm.save_path, name=name) as writer:
 
                 tdm.prepare_experiment(writer, __file__)
 
-                for i in range(len(self.if_freqs)):
+                for i in tqdm(range(len(self.if_freqs))):
                     self.output_if(
                         self.if_freqs[i], self.i_amp, self.q_amps[i], self.thetas[i]
                     )
-                    trace = self.spectrum_analyzer.trace()
+                    trace = tdm.spectrum_analyzer.trace()
                     writer.add_data(
                         if_freq=self.if_freqs[i],
                         i_amp=self.i_amp,
@@ -325,7 +330,7 @@ class CalibrateIQMixer(object):
             wiring=tdm.wiring_info,
             station=tdm.station,
             awg=self.awg,
-            spectrum_analyzer=self.spectrum_analyzer,
+            spectrum_analyzer=tdm.spectrum_analyzer,
             lo_freq=tdm.lo[self.target_port].frequency(),  # Hz
             if_step=10,  # MHz
             amps=np.linspace(0.1, 1.4, 14),
