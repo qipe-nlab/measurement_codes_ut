@@ -13,7 +13,7 @@ This package also includes python files to execute automated timedomain basic me
 pip install plottr@git+https://github.com/qipe-nlab/plottr.git@search-datadict
 pip install qcodes_drivers@git+https://github.com/qipe-nlab/qcodes_drivers.git
 pip install sequence_parser@git+https://github.com/qipe-nlab/sequence_parser.git
-pip install measurement_codes_ut@git+https://github.com/s-watanabe13/measurement_codes_ut.git 
+pip install measurement_codes_ut@git+https://github.com/qipe-nlab/measurement_codes_ut.git 
 ```
 
 ## Usage
