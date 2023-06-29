@@ -60,16 +60,21 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             port = port_manager.port
             port_manager.update_frequency()
             if "readout" in port.name:
-                del waveform_awg[awg_index, awg_ch]
+                del waveform_awg[key]
                 dig_ch = self.digitizer_ch[key]
                 waveform = port.waveform
                 # plt.plot(waveform.real)
                 if noise_variance > 0:
                     waveform += rng.normal(scale=np.sqrt(noise_variance),
                                            size=len(waveform))
-                if self.IQ_corrector[port.name] is not None:
-                    waveform_corrected = self.IQ_corrector[port.name].correct(
-                        waveform)
+
+                if isinstance(awg_ch, tuple):
+                    try:
+                        waveform_corrected = self.IQ_corrector[port.name].correct(
+                            waveform)
+                    except:
+                        waveform_corrected = [waveform.real, waveform.imag]
+
                     for _ in range(2):  # i or q
                         wave = waveform_corrected[_]
                         awg.load_waveform(wave, waveform_idx,
@@ -99,16 +104,16 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
             else:
                 waveform = port.waveform
-                waveform_awg[awg_index, awg_ch] += waveform
+                waveform_awg[key] += waveform
 
         for key, waveform in waveform_awg.items():
             awg_index, awg_ch = self.awg_ch[key]
             awg = self.awg[awg_index]
-            if self.IQ_corrector[key] is not None:
+            if isinstance(awg_ch, tuple):
                 try:
                     waveform_corrected = self.IQ_corrector[key].correct(
                         waveform)
-                except NameError:
+                except:
                     i = waveform.real
                     q = waveform.imag
                     waveform_corrected = i, q
@@ -142,10 +147,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
             for name, lo in self.lo.items():
-                if "SGS" in self.lo_info[name]['model']:
-                    lo.on()
-                else:
+                try:
                     lo.output(True)
+                except:
+                    lo.on()
             for awg_index, awg_ch in self.awg_ch.values():
                 awg = self.awg[awg_index]
                 if isinstance(awg_ch, tuple):
@@ -195,10 +200,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             for dig in self.digitizer_ch.values():
                 dig.stop()
             for name, lo in self.lo.items():
-                if "SGS" in self.lo_info[name]['model']:
-                    lo.on()
-                else:
+                try:
                     lo.output(False)
+                except:
+                    lo.on()
 
     def stop(self):
         self.hvi_trigger.output(False)
