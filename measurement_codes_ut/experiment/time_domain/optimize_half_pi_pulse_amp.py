@@ -167,7 +167,7 @@ class OptimizeHalfPiAmp(object):
 
         plot_amp = np.linspace(amp_range[0], amp_range[-1], 101)
 
-        plt.figure(figsize=(5, 5))
+        plt.figure(figsize=(8, 6))
         plt.title(f"{self.data_path}")
 
         fit_params = {}

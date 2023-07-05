@@ -177,7 +177,7 @@ class CheckT2Echo(object):
         plotter.plot_fitting(time, component, y_fit=component_fit)
         # plt.xscale("log")
         plotter.label("Time (ns)", "Response")
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()

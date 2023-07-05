@@ -193,7 +193,7 @@ class FindDispersiveShift(object):
         #     cavity_dressed_frequency_e["MHz"], color="red", linestyle="--", label="cavity e freq")
         plotter.label("Frequency (Hz)", "G-E distance")
         plt.legend()
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()

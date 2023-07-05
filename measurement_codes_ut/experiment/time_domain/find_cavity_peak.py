@@ -174,7 +174,7 @@ class FindCavityPeak(object):
         plot = PlotHelper(f"{self.data_path}", 1, 3)
         plot.plot_fitting(freq, np.abs(response), y_fit=np.abs(
             response_fit), label="Amplitude")
-        plot.label("Frequency (Hz)", "response")
+        plot.label("Frequency (Hz)", "Magnitude")
         plt.ylim(0, 1.1*np.max(np.abs(response)))
         plt.axvline(
             self.cavity_dressed_frequency, color="black", linestyle="--")
@@ -189,7 +189,7 @@ class FindCavityPeak(object):
         plot.change_plot(0, 2)
         plot.plot_complex(response, fit=response_fit)
         plot.label("I", 'Q')
-
+        plt.tight_layout()
         if savefig:
             os.makedirs(savepath, exist_ok=True)
             plt.savefig(

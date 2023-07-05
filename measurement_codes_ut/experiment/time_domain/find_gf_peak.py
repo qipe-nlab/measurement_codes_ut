@@ -170,7 +170,7 @@ class FindGFPeak(object):
         plot.change_plot(0, 2)
         plot.plot_fitting(freq, component, y_fit=component_fit, label="PCA")
         plot.label("Drive frequency (Hz)", "Response")
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()

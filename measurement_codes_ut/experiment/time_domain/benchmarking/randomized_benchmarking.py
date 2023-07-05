@@ -219,7 +219,7 @@ class RandomizedBenchmarking:
             min(self.length_list), max(self.length_list), 10001)
         y_fit = exp_decay(length_fit, *popt)
 
-        plt.figure()
+        plt.figure(figsize=(8, 6))
         plt.title(f'{self.data_path}')
         plt.errorbar(self.length_list, response_mean, yerr=response_std,
                      fmt='o', capsize=5, color='black', label='data')

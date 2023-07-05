@@ -175,7 +175,7 @@ class CheckT1Decay(object):
 
         # plt.xscale("log")
         plotter.label("Time (ns)", "Response")
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()

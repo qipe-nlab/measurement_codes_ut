@@ -208,7 +208,7 @@ class CheckT2Ramsey(object):
         plotter.change_plot(0, 2)
         plotter.plot_fitting(time, component, y_fit=component_fit, label="PCA")
         plotter.label("Time (ns)", "Response")
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(
                 f"{savepath}/{self.data_path}.png")

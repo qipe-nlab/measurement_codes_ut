@@ -126,6 +126,7 @@ class CheckReadoutPower(object):
         plot.plot_complex(data=signal, label="Signal")
         plot.label("I", "Q")
         plt.legend()
+        plt.tight_layout()
 
         if savefig:
             os.makedirs(savepath, exist_ok=True)

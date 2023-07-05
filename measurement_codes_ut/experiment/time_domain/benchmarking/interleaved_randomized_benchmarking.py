@@ -243,8 +243,7 @@ class InterleavedRandomizedBenchmarking:
             a0 = np.exp(_b)
 
             popt, pcov = curve_fit(exp_decay, self.length_list, response_mean, p0=[
-                                a0, b0, p0], maxfev=10000)
-            
+                a0, b0, p0], maxfev=10000)
 
             length_fit = np.linspace(
                 min(self.length_list), max(self.length_list), 10001)
@@ -255,20 +254,21 @@ class InterleavedRandomizedBenchmarking:
             y_fit_list.append(y_fit)
 
         new_p = popt_list[1][2] / popt_list[0][2]
-        fg = (1 + (2**self.number_of_qubit - 1)*new_p)/(2**self.number_of_qubit)
+        fg = (1 + (2**self.number_of_qubit - 1)*new_p) / \
+            (2**self.number_of_qubit)
         colors = ['red', 'blue']
         labels = ['Reference', 'Interleaved']
-        plt.figure()
+        plt.figure(figsize=(8, 6))
         plt.title(f'{self.interleaved_rb.data_path}')
         for i in range(2):
             plt.errorbar(self.length_list, res_mean[i], yerr=res_std[i], label=f"{labels[i]} data",
-                        fmt='o', capsize=5, color='black')
+                         fmt='o', capsize=5, color='black')
             if i == 0:
                 plt.plot(length_fit, y_fit_list[i], color=colors[i],
-                        label=f'Reference fit')
+                         label=f'Reference fit')
             if i == 1:
                 plt.plot(length_fit, y_fit_list[i], color=colors[i],
-                        label=f'Gate fidelity: {fg:.5f}')
+                         label=f'Gate fidelity: {fg:.5f}')
         plt.legend()
         plt.xlabel('Sequence length')
         plt.ylabel('Response')

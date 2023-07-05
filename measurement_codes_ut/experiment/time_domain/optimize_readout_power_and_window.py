@@ -207,7 +207,7 @@ class OptimizeReadoutPowerAndWindow(object):
         readout_power_opt = power_list[chosen_index]
         window_opt = window_list[chosen_index]
 
-        plt.figure()
+        plt.figure(figsize=(8, 6))
         plt.title(f"{self.data_path}")
         plt.plot(power_list, fid, marker='.')
         plt.axvline(readout_power_opt, ls='--', color='black')

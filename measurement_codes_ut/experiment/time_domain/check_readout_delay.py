@@ -135,7 +135,7 @@ class CheckReadoutDelay(object):
         # plot.plot([delay_time, delay_time], [np.min(projected),
         #           np.max(projected)], label="start point")
         plot.label("Time (ns)", "Response")
-
+        plt.tight_layout()
         # plot.change_plot(0, 1)
         # plot.plot(time, projected[:, 0], label="PCA")
         # plot.plot(time, projected[:, 1], label="anti-PCA")

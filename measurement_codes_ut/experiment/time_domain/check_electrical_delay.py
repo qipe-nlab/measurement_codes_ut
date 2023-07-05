@@ -129,6 +129,7 @@ class CheckElectricalDelay(object):
         plot.plot_complex(signal * np.exp(-1.j * 2*np.pi *
                           freq * electrical_delay), label='IQ corrected')
         plot.label("I", "Q")
+        plt.tight_layout()
 
         if savefig:
             os.makedirs(savepath, exist_ok=True)

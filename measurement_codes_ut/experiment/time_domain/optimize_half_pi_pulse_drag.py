@@ -170,7 +170,7 @@ class OptimizeHalfPiDRAG(object):
         coeff = drag_range
         plot_coeff = np.linspace(coeff[0], coeff[-1], 1001)
 
-        plt.figure(figsize=(5, 5))
+        plt.figure(figsize=(8, 6))
         plt.title(f"{self.data_path}")
 
         sm_val = []

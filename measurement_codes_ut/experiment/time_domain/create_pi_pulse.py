@@ -175,7 +175,7 @@ class CreatePiPulse(object):
         plotter.plot(power, fit_curve, label="PCA fit")
         plt.axvline(pi_pulse_power, color="black", linestyle="--")
         plotter.label("Pulse amplitude", "Response")
-
+        plt.tight_layout()
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()
