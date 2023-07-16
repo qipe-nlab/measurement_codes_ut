@@ -128,27 +128,30 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 variables.update_command_list.append(update_command)
         
         var_dict = {key:dict(unit=value[0].unit) for key, value in zip(variables.variable_name_list, variables.variable_list)}
-        for port in seq.port:
+        for port in seq.port_list:
             if "acquire" in port.name:
                 var_dict[port.name] = dict(axes=list(var_dict.keys()))
 
         data = DataDict(**var_dict)
         data.validate()
 
-        save_path = self.save_path + dataset_subpath
+        save_path = self.save_path + dataset_subpath + "/"
 
         with DDH5Writer(data, save_path, name=dataset_name) as writer:
             self.prepare_experiment(writer, exp_file)
             if verbose:
                 for update_command in tqdm(variables.update_command_list):
+                    seq.update_variables(update_command)
+                    # seq.draw()
                     raw_data = self.run(seq, as_complex=as_complex)
                     write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
-                    for port in seq.port:
+                    for port in seq.port_list:
                         if "acquire" in port.name:
-                            write_dict[port.name] = raw_data[port.name]
+                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                     writer.add_data(**write_dict)
             else:
                 for update_command in variables.update_command_list:
+                    seq.update_variables(update_command)
                     raw_data = self.run(seq, as_complex=as_complex)
                     write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
                     for port in seq.port:
@@ -273,7 +276,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         self.hvi_trigger.trigger_period(
             int((self.repetition_margin + self.seq_len)/10+1)*10)  # ns
 
-        self.set_acquisition_mode(averaging_shot, averaging_waveform)
+        # self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
             for name, lo in self.lo.items():
                 try:
