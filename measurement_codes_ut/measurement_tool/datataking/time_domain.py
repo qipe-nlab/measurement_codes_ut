@@ -1,5 +1,6 @@
 import numpy as np
 from logging import getLogger
+import copy
 
 import numpy as np
 import qcodes as qc
@@ -35,8 +36,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         """
         # print("Creating a new insturment management class for timedomain measurement...", end="")
         super().__init__(session, trigger_address, save_path)
+        self.sequence = None
 
-    def take_data(self, sequences, dataset_name: str, lo_sweep=None):
+    def take_data(self, dataset_name: str, dataset_subpath: str = "", sweep_axis: list = None, verbose: bool = True):
+
         pass
 
     def set_wiring_note(self, wiring_info):
