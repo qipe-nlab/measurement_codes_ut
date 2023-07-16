@@ -1,8 +1,9 @@
 import numpy as np
 from logging import getLogger
-import copy
 
 import numpy as np
+import itertools
+import os
 import qcodes as qc
 from qcodes_drivers.E82x7 import E82x7
 from qcodes_drivers.N51x1 import N51x1
@@ -10,12 +11,14 @@ from qcodes_drivers.HVI_Trigger import HVI_Trigger
 from qcodes_drivers.iq_corrector import IQCorrector
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
-from sequence_parser import Port, Sequence
+from sequence_parser import Sequence, Variable, Variables
+from tqdm import tqdm
 from sequence_parser.iq_port import IQPort
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from .instrument_manager import InstrumentManagerBase
-from plottr.data.datadict_storage import DataDict, DDH5Writer
+from plottr.data.datadict_storage import DataDict, DDH5Writer, datadict_from_hdf5
 from .port_manager import PortManager
+
 
 import matplotlib.pyplot as plt
 
@@ -37,11 +40,134 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         # print("Creating a new insturment management class for timedomain measurement...", end="")
         super().__init__(session, trigger_address, save_path)
         self.sequence = None
+        self.variables = None
 
-    def take_data(self, dataset_name: str, dataset_subpath: str = "", sweep_axis: list = None, verbose: bool = True):
+    def take_data(self, 
+                  dataset_name: str, 
+                  dataset_subpath: str = "", 
+                  sweep_axis: list = None, 
+                  as_complex: bool = True, 
+                  exp_file: str = None,
+                  verbose: bool = True):
+        """take data
 
-        pass
+        Args:
+            dataset_name (str): dataset name
+            dataset_subpath (str, optional): data is saved to specified subpath of datavault. Defaults to "".
+            sweep_axis (Optional[list], optional): assignment of independent sweep parameters to axis. If None,
+                i-th independent sweep parameter is assigned to i-th loop axis. Defaults to None.
+            as_complex (bool, optional): If true, obtain data as complex data. If false, obtain data as I, Q data. Defaults to True.
+            exp_file (str, optional): File name in which experiment is executed. Defaults to None, which saves no backup file except for this .py.
+            verbose (bool, optional): If true, show tqdm progress bar. Defaults to True.
 
+        Returns:
+            Dataset: taken dataset
+        """
+        seq = self.sequence
+        variables = self.variables
+
+        # Re-construct variablse.command_list
+        if sweep_axis is not None:
+
+            original_sweep_dims = [size for size in variables.variable_size_list]
+            original_sweep_labels = [name for name in variables.variable_name_list]
+            axis_count = len(list(set(sweep_axis)))
+            if len(sweep_axis) != len(original_sweep_dims):
+                raise ValueError("len(sweep_axis) must be equal to the number of sweep parameters. {} sweep parameters found.".format(len(original_sweep_dims)))
+            if min(sweep_axis) != 0:
+                raise ValueError("axis index must be starts from zero. However, there is no 0-th index or there is negative index in sweep_axis.")
+            if max(sweep_axis) + 1 != axis_count:
+                raise ValueError("There is skipped index in sweep_axis. max(sweep_axis)+1 must be equal to unique integer numbers in sweep_axis.")
+
+            # gather information of sweep parameters belonging to i-th axis index.
+            axis_groups = [[] for _ in range(axis_count)]
+            for sweep_parameter_index, axis_index in enumerate(sweep_axis):
+                assert(0 <= axis_index and axis_index < len(axis_groups))
+                sweep_parameter_info = {
+                    "index": sweep_parameter_index,
+                    "dim": original_sweep_dims[sweep_parameter_index],
+                    "label": original_sweep_labels[sweep_parameter_index]
+                }
+                axis_groups[axis_index].append(sweep_parameter_info)
+
+            # check sweep parameters belonging to each axis have the same dimensions
+            for axis_index in range(axis_count):
+                assert(len(axis_groups[axis_index]) > 0)
+                dims = [item["dim"] for item in axis_groups[axis_index]]
+                labels = [item["label"] for item in axis_groups[axis_index]]
+                check_flag = all([dim == dims[0] for dim in dims])
+                if not check_flag:
+                    raise ValueError("{}-th axis have parameters {} which have different dimension lists {}.".format(axis_index, labels, dims))
+
+            axis_dims = [group[0]["dim"] for group in axis_groups]
+            shape_axis_groups = tuple([len(l) for l in axis_groups])
+
+            def dim2index(tuple_input, reference_tuple):
+                tuple_list = list(itertools.product(*[range(x) for x in tuple_input]))
+                tuple_list_all = []
+                for t in tuple_list:
+                    result = []
+                    for inp, ref in zip(t, reference_tuple):
+                        for _ in range(ref):
+                            result.append(inp)
+                    tuple_list_all.append(tuple(result))
+                return tuple_list_all
+            
+            t = tuple(axis_dims)
+            sweep_index = dim2index(t, shape_axis_groups)
+
+            variables.update_command_list = []
+            tmp_var = dict(zip(variables.variable_name_list, [None]*len(variables.variable_name_list)))
+            for tmp_index in sweep_index:
+                update_command = {}
+                for variable, idx in zip(variables.variable_list, tmp_index):
+                    for var in variable:
+                        if tmp_var[var.name] != var.value_array[idx]:
+                            tmp_var[var.name] = var.value_array[idx]
+                            update_command[var.name] = idx
+                variables.update_command_list.append(update_command)
+        
+        var_dict = {key:dict(unit=value[0].unit) for key, value in zip(variables.variable_name_list, variables.variable_list)}
+        for port in seq.port:
+            if "acquire" in port.name:
+                var_dict[port.name] = dict(axes=list(var_dict.keys()))
+
+        data = DataDict(**var_dict)
+        data.validate()
+
+        save_path = self.save_path + dataset_subpath
+
+        with DDH5Writer(data, save_path, name=dataset_name) as writer:
+            self.prepare_experiment(writer, exp_file)
+            if verbose:
+                for update_command in tqdm(variables.update_command_list):
+                    raw_data = self.run(seq, as_complex=as_complex)
+                    write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                    for port in seq.port:
+                        if "acquire" in port.name:
+                            write_dict[port.name] = raw_data[port.name]
+                    writer.add_data(**write_dict)
+            else:
+                for update_command in variables.update_command_list:
+                    raw_data = self.run(seq, as_complex=as_complex)
+                    write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                    for port in seq.port:
+                        if "acquire" in port.name:
+                            write_dict[port.name] = raw_data[port.name]
+                    writer.add_data(**write_dict)
+
+        files = os.listdir(save_path)
+        date = files[-1] + '/'
+        files = os.listdir(save_path+date)
+        data_path = files[-1]
+
+        data_path_all = save_path+date+data_path + '/'
+
+        dataset = datadict_from_hdf5(data_path_all+"data")
+
+        return dataset
+        
+        
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
 
@@ -261,6 +387,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
     def prepare_experiment(self, writer, exp_file):
         writer.add_tag(self.tags)
-        writer.backup_file([exp_file, __file__])
+        if exp_file is None:
+            writer.backup_file([__file__])
+        else:
+            writer.backup_file([exp_file, __file__])
         writer.save_text("wiring.md", self.wiring_info)
         writer.save_dict("station_snapshot.json", self.station.snapshot())

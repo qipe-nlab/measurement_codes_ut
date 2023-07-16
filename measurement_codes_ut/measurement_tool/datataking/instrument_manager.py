@@ -56,7 +56,6 @@ class InstrumentManagerBase(object):
         self.acquire_port = {}
 
         self.IQ_corrector = {}
-        self.IQ_corrector_info = {}
         self.lo_id = 0
         self.awg_id = 0
         self.dig_id = 0
@@ -165,12 +164,6 @@ class InstrumentManagerBase(object):
                     len_kernel=41,
                     fit_weight=10,
                 )
-                self.IQ_corrector_info[port_name] = {
-                    "channel": f"chasis{awg_chasis} slot{awg_slot} ch{awg_channel}",
-                    "data_path": IQ_corrector["calibration_path"],
-                    "lo_leakage_date": IQ_corrector["lo_leakage_datetime"],
-                    "rf_power_date": IQ_corrector["rf_power_datetime"]
-                }
             self.awg_id += 1
 
         else:
@@ -196,12 +189,6 @@ class InstrumentManagerBase(object):
                     len_kernel=41,
                     fit_weight=10,
                 )
-                self.IQ_corrector_info[port_name] = {
-                    "channel": f"chasis{awg_chasis} slot{awg_slot} ch{awg_channel}",
-                    "data_path": IQ_corrector["calibration_path"],
-                    "lo_leakage_date": IQ_corrector["lo_leakage_datetime"],
-                    "rf_power_date": IQ_corrector["rf_power_datetime"]
-                }
 
         self.awg_ref[port_name] = {'chasis': awg_chasis, 'slot': awg_slot}
 
@@ -327,16 +314,9 @@ class InstrumentManagerBase(object):
             len_kernel=41,
             fit_weight=10,
         )
-        index = list(self.port.keys()).index(port_name)
-        awg_channel_info = self.awg_info['channel'][index]
-        self.IQ_corrector_info[port_name] = {
-            "channel": awg_channel_info,
-            "data_path": IQ_corrector["calibration_path"],
-            "lo_leakage_date": IQ_corrector["lo_leakage_datetime"],
-            "rf_power_date": IQ_corrector["rf_power_datetime"]
-        }
 
-        self.awg_ch[port_name][1] = awg_channel
+        awg = self.awg_ch[port_name][0]
+        self.awg_ch[port_name] = awg, awg_channel
 
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
@@ -419,24 +399,6 @@ class InstrumentManagerBase(object):
             if_freq = value.port.if_freq*1e3
 
             s += f"{name:<20} {freq:<20.6f} {if_freq:<20.1f}\n"
-
-        s += "\n\n*** IQ corrector status ***\n"
-        s += "{:20} {:30} {:30} {:40} {:40}\n".format(
-            "port name", "AWG channels", "Calibration path", "LO leakage date", "RF power date")
-        s += "-" * (20 + 30 + 30 + 40 + 40) + "\n"
-        for _, (key, value) in enumerate(self.port.items()):
-            name = key
-            channel = self.awg_info['channel'][_]
-            if self.IQ_corrector[key] is None:
-                path = ""
-                lo_leakage = ""
-                rf_power = ""
-            else:
-                path = self.IQ_corrector_info[key]["data_path"]
-                lo_leakage = self.IQ_corrector_info[key]["lo_leakage_date"]
-                rf_power = self.IQ_corrector_info[key]["rf_power_date"]
-
-            s += f"{name:20} {channel:30} {path:30} {lo_leakage:40} {rf_power:40}\n"
 
         s += "\n\n*** Current source status ***\n"
         s += "{:20} {:20}\n".format(
