@@ -1,12 +1,12 @@
 # measurement_codes_ut
 
-This is a library supporting time-domain experiments using the fridges in Univ. of Tokyo.
+This is a library supporting time-domain experiments using the fridges at Univ. of Tokyo.
 
-This packages aims to complete everything within jupyter notebook without any setup files like setup_td.py.
+This package aims to complete everything within jupyter notebook without any setup files like setup_td.py.
 
-Users are reccomended to use CalibratonNote class to save/load calibration results instead of manually noting information on setup files.
+Users are recommended to use CalibratonNote class to save/load calibration results instead of manually noting information on setup files.
 
-This package also includes python files to execute automated timedomain basic measurements.
+This package also includes python files to execute automated time-domain basic measurements.
 
 ## Installation
 ```
@@ -26,7 +26,7 @@ from sequence_parser import Sequence, Variable, Variables
 from sequence_parser.instruction import *
 ```
 
-### Create Session object to designate user name, cooling down, and sample name.
+### Create a Session object to designate the user name, cooling down, and sample name.
 ```python
 session = Session(
     cooling_down_id='CDxxx', 
