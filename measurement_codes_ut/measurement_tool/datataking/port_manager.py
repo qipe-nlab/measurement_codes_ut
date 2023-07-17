@@ -3,6 +3,8 @@ from typing import Union, List, Any
 
 from sequence_parser import Port, Sequence
 
+import time
+
 
 class PortManager(object):
 
@@ -22,6 +24,7 @@ class PortManager(object):
         self.update_frequency()
 
     def update_frequency(self):
+        time.sleep(0.01)
         self.lo.frequency(self.frequency + self.sideband*self.port.if_freq*1e9)
 
     def set_status(self, status):

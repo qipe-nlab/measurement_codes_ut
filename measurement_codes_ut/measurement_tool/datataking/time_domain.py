@@ -3,6 +3,7 @@ from logging import getLogger
 
 import numpy as np
 import itertools
+import copy
 import os
 import qcodes as qc
 from qcodes_drivers.E82x7 import E82x7
@@ -44,7 +45,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
     def take_data(self, 
                   dataset_name: str, 
-                  dataset_subpath: str = "", 
+                  dataset_subpath: str = "data", 
                   sweep_axis: list = None, 
                   as_complex: bool = True, 
                   exp_file: str = None,
@@ -66,7 +67,204 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         seq = self.sequence
         variables = self.variables
 
-        # Re-construct variablse.command_list
+        flag = False
+        for key, port in self.port.items():
+            if isinstance(port.frequency, np.ndarray):
+                flag = True
+        if flag:
+            dataset = self.take_data_lo_sweep(
+                dataset_name, 
+                dataset_subpath, 
+                sweep_axis, 
+                as_complex, 
+                exp_file,
+                verbose)
+            
+        else:
+
+            # Re-construct variablse.command_list        
+            if variables is not None:
+                variables = self.set_variables(variables, sweep_axis)
+                self.variables = variables
+                var_dict = {key:dict(unit=value[0].unit) for key, value in zip(variables.variable_name_list, variables.variable_list)}
+                var = True
+            else:
+                var_dict = {}
+                var = False
+            for port in seq.port_list:
+                if "acquire" in port.name:
+                    var_dict[port.name] = dict(axes=list(var_dict.keys()))
+
+            data = DataDict(**var_dict)
+            data.validate()
+
+            save_path = self.save_path + dataset_subpath + "/"
+
+            with DDH5Writer(data, save_path, name=dataset_name) as writer:
+                self.prepare_experiment(writer, exp_file)
+                if verbose:
+                    if var:
+                        for update_command in tqdm(variables.update_command_list):
+                            seq.update_variables(update_command)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex)
+                        write_dict = {}
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+                else:
+                    if var:
+                        for update_command in variables.update_command_list:
+                            seq.update_variables(update_command)
+                            raw_data = self.run(seq, as_complex=as_complex)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            for port in seq.port:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[port.name]
+                            writer.add_data(**write_dict)
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex)
+                        write_dict = {}
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+
+            files = os.listdir(save_path)
+            date = files[-1] + '/'
+            files = os.listdir(save_path+date)
+            data_path = files[-1]
+
+            data_path_all = save_path+date+data_path + '/'
+
+            dataset = datadict_from_hdf5(data_path_all+"data")
+
+        return dataset
+    
+    def take_data_lo_sweep(self, 
+                  dataset_name: str, 
+                  dataset_subpath: str = "data", 
+                  sweep_axis: list = None, 
+                  as_complex: bool = True, 
+                  exp_file: str = None,
+                  verbose: bool = True):
+        """take data
+
+        Args:
+            dataset_name (str): dataset name
+            dataset_subpath (str, optional): data is saved to specified subpath of datavault. Defaults to "".
+            sweep_axis (Optional[list], optional): assignment of independent sweep parameters to axis. If None,
+                i-th independent sweep parameter is assigned to i-th loop axis. Defaults to None.
+            as_complex (bool, optional): If true, obtain data as complex data. If false, obtain data as I, Q data. Defaults to True.
+            exp_file (str, optional): File name in which experiment is executed. Defaults to None, which saves no backup file except for this .py.
+            verbose (bool, optional): If true, show tqdm progress bar. Defaults to True.
+
+        Returns:
+            Dataset: taken data
+        """
+        lo_sweep_dict = {}
+        for key, port in self.port.items():
+            if isinstance(port.frequency, np.ndarray):
+                lo_sweep_dict[key] = copy.copy(port.frequency)
+        if len(lo_sweep_dict) >= 2:
+            raise ValueError("Cannot sweep more than 1 LO frequency at the same time. {} are set as sweep parameters.".format(list(lo_sweep_dict.keys())))
+        
+        seq = self.sequence
+        variables = self.variables
+        if variables is not None:
+            variables = self.set_variables(variables, sweep_axis)
+            self.variables = variables
+            var_dict = {key:dict(unit=value[0].unit) for key, value in zip(variables.variable_name_list, variables.variable_list)}
+            var_other = True
+        else:
+            var_dict = {}
+            var_other = False
+
+        lo_sweep_key = list(lo_sweep_dict.keys())[0]
+        lo_sweep_value = list(lo_sweep_dict.values())[0]
+
+        
+        var_dict[lo_sweep_key+"_LO_frequency"] = dict(unit='Hz')
+        for port in seq.port_list:
+            if "acquire" in port.name:
+                var_dict[port.name] = dict(axes=list(var_dict.keys()))
+
+        data = DataDict(**var_dict)
+        data.validate()
+
+        save_path = self.save_path + dataset_subpath + "/"
+
+        with DDH5Writer(data, save_path, name=dataset_name) as writer:
+            self.prepare_experiment(writer, exp_file)
+            if verbose:
+                for lo in tqdm(lo_sweep_value):
+                    self.port[lo_sweep_key].set_frequency(lo)
+                    if var_other:
+                        for update_command in tqdm(variables.update_command_list):
+                            seq.update_variables(update_command)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex)
+                        write_dict = {}
+                        write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+
+            else:
+                for lo in lo_sweep_value:
+                    self.port[lo_sweep_key].set_frequency(lo)
+                    if var_other:
+                        for update_command in variables.update_command_list:
+                            seq.update_variables(update_command)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex)
+                        write_dict = {}
+                        write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+
+        files = os.listdir(save_path)
+        date = files[-1] + '/'
+        files = os.listdir(save_path+date)
+        data_path = files[-1]
+
+        data_path_all = save_path+date+data_path + '/'
+
+        dataset = datadict_from_hdf5(data_path_all+"data")
+
+        return dataset
+
+
+    def set_variables(self, variables, sweep_axis):
         if sweep_axis is not None:
 
             original_sweep_dims = [size for size in variables.variable_size_list]
@@ -113,6 +311,26 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     tuple_list_all.append(tuple(result))
                 return tuple_list_all
             
+            def reorder_list(lst, reference):
+                new_mapping = {key:reference[i] for i, key in enumerate(lst)}
+                
+                sorted_list = []
+                for _ in range(max(reference)+1):
+                    elem = [k for k, v in new_mapping.items() if v == _]
+                    sorted_list += elem
+                
+                return sorted_list
+            
+            var_name_list = reorder_list(variables.variable_name_list, sweep_axis)
+            var_list = [tuple(i) for i in variables.variable_list]
+            var_list = reorder_list(var_list, sweep_axis)
+            var_list = [list(i) for i in var_list]
+            var_size_list = reorder_list(variables.variable_size_list, sweep_axis)
+
+            variables.variable_name_list = var_name_list
+            variables.variable_list = var_list
+            variable.variable_size_list = var_size_list
+            
             t = tuple(axis_dims)
             sweep_index = dim2index(t, shape_axis_groups)
 
@@ -126,49 +344,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                             tmp_var[var.name] = var.value_array[idx]
                             update_command[var.name] = idx
                 variables.update_command_list.append(update_command)
-        
-        var_dict = {key:dict(unit=value[0].unit) for key, value in zip(variables.variable_name_list, variables.variable_list)}
-        for port in seq.port_list:
-            if "acquire" in port.name:
-                var_dict[port.name] = dict(axes=list(var_dict.keys()))
 
-        data = DataDict(**var_dict)
-        data.validate()
+        return variables
 
-        save_path = self.save_path + dataset_subpath + "/"
 
-        with DDH5Writer(data, save_path, name=dataset_name) as writer:
-            self.prepare_experiment(writer, exp_file)
-            if verbose:
-                for update_command in tqdm(variables.update_command_list):
-                    seq.update_variables(update_command)
-                    # seq.draw()
-                    raw_data = self.run(seq, as_complex=as_complex)
-                    write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
-                    for port in seq.port_list:
-                        if "acquire" in port.name:
-                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
-                    writer.add_data(**write_dict)
-            else:
-                for update_command in variables.update_command_list:
-                    seq.update_variables(update_command)
-                    raw_data = self.run(seq, as_complex=as_complex)
-                    write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
-                    for port in seq.port:
-                        if "acquire" in port.name:
-                            write_dict[port.name] = raw_data[port.name]
-                    writer.add_data(**write_dict)
-
-        files = os.listdir(save_path)
-        date = files[-1] + '/'
-        files = os.listdir(save_path+date)
-        data_path = files[-1]
-
-        data_path_all = save_path+date+data_path + '/'
-
-        dataset = datadict_from_hdf5(data_path_all+"data")
-
-        return dataset
         
         
     def set_wiring_note(self, wiring_info):
