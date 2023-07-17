@@ -22,10 +22,8 @@ pip install measurement_codes_ut@git+https://github.com/qipe-nlab/measurement_co
 from measurement_codes_ut.measurement_tool.session import SessionManager as Session
 from measurement_codes_ut.measurement_tool.datataking.time_domain import TimeDomainInstrumentManager as TDM
 from measurement_codes_ut.measurement_tool import CalibrationNote
-from sequence_parser import Sequence
+from sequence_parser import Sequence, Variable, Variables
 from sequence_parser.instruction import *
-from plottr.data.datadict_storage import datadict_from_hdf5
-from plottr.data.datadict_storage import DataDict, DDH5Writer
 ```
 
 ### Create Session object to designate user name, cooling down, and sample name.
@@ -33,7 +31,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 session = Session(
     cooling_down_id='CDxxx', 
     experiment_username="YOUR NAME", 
-    sample_name="SAMPLE")
+    sample_name="SAMPLE NAME")
 ```
 
 ### Save all the information of measurement instruments in TimeDomainInstrumentManager class. 
