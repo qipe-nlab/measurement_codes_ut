@@ -106,59 +106,38 @@ dur_range = np.linspace(10, 500, 40, dtype=int)
 qubit_amplitude = 1.0
 readout_amplitude = 0.4
 
-sequences = []
-for dur in dur_range:
-    seq = Sequence(ports)
-    if dur % 2 != 0:
-        seq.add(Delay(1), qubit_port)
-    seq.add(Gaussian(amplitude=qubit_amplitude, fwhm=dur/3, duration=dur), qubit_port)
-    seq.trigger(ports)
-    seq.add(ResetPhase(phase=0), readout_port, copy=False)
-    seq.add(Square(amplitude=readout_amplitude, duration=2000), readout_port)
-    seq.add(Acquire(duration=2000), acq_port)
+qubit_amplitude = 0.5
+readout_amplitude = 0.4
 
-    seq.trigger(ports)
-    sequences.append(seq)
-            
-seq.draw()
+duration = Variable("duration", np.linspace(10, 200, 20), "ns")
+variables = Variables([duration])
 
-data = DataDict(
-            time=dict(unit="ns"),
-            s11=dict(axes=["time"]),
-        )
-data.validate()
+seq = Sequence(ports)
+seq.add(FlatTop(Gaussian(amplitude=qubit_amplitude, fwhm=10, duration=20, zero_end=True), top_duration=duration), qubit_port)
+seq.trigger(ports)
+seq.add(ResetPhase(phase=0), readout_port, copy=False)
+seq.add(Square(amplitude=readout_amplitude, duration=2000), readout_port)
+seq.add(Acquire(duration=2000), acq_port)
 
-with DDH5Writer(data, tdm.save_path, name='Rabi') as writer:
-    tdm.prepare_experiment(writer, 'notebook.ipynb')
-    for i, seq in enumerate(tqdm(sequences)):
-        raw_data = tdm.run(
-            seq, as_complex=True)
-        writer.add_data(
-            time=dur_range[i],
-            s11=raw_data['readout'],
-        )
+seq.trigger(ports)
+
+tdm.sequence = seq
+tdm.variables = variables
+
+dataset = tdm.take_data(dataset_name="test", dataset_subpath="test", as_complex=True, exp_file="test.ipynb")
+
 ```
 
 ### Plot
 ```python
-files = os.listdir(tdm.save_path)
-date = files[-1] + '/'
-files = os.listdir(tdm.save_path+date)
-data_path = files[-1]
+time = dataset['duration']['values']
+cplx = dataset['readout_acquire']['values']
 
-data_path_all = tdm.save_path+date+data_path + '/'
-
-dataset = datadict_from_hdf5(data_path_all+"data")
-
-from measurement_codes_ut.helper.plot_helper import PlotHelper
-
-time = dataset['time']['values']
-cplx = dataset['s11']['values']
-
-plot = PlotHelper(title=data_path)
+plot = PlotHelper(title="")
 plot.plot(time, cplx.real, label='I')
 plot.plot(time, cplx.imag, label='Q')
 plot.label("Time (ns)", "Signal")
 plt.legend()
 plt.show()
+
 ```
