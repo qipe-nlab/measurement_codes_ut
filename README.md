@@ -131,10 +131,10 @@ dataset = tdm.take_data(dataset_name="test", dataset_subpath="test", as_complex=
 time = dataset['duration']['values']
 cplx = dataset['readout_acquire']['values']
 
-plot = PlotHelper(title="")
-plot.plot(time, cplx.real, label='I')
-plot.plot(time, cplx.imag, label='Q')
-plot.label("Time (ns)", "Signal")
+plt.figure()
+plt.plot(time, cplx.real, label='I')
+plt.plot(time, cplx.imag, label='Q')
+plt.label("Time (ns)", "Signal")
 plt.legend()
 plt.show()
 
