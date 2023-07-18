@@ -16,7 +16,7 @@ from plottr.data.datadict_storage import datadict_from_hdf5
 from measurement_code_ut.fitting import ResonatorReflectionModel
 from measurement_codes_ut.fitting.qubit_spectral import QubitSpectral
 # from measurement_codes.fitting.rabi_oscillation import RabiOscillation
-from measurement_code_ut.fitting import DampedOscillation_plus_ConstantModel
+from measurement_codes_ut.fitting import DampedOscillation_plus_ConstantModel
 
 from scipy.optimize import curve_fit
 
