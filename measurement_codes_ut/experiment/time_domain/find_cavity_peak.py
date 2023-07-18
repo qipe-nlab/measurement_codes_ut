@@ -34,12 +34,18 @@ class FindCavityPeak(object):
         "cavity_intrinsic_decay_rate",
     ]
 
-    def __init__(self, num_shot=1000, repetition_margin=50e3, sweep_range=50e6, sweep_step=51):
+    def __init__(self, num_shot=1000, repetition_margin=50e3, sweep_range=50e6, sweep_step=51, fitting_option=None):
         self.dataset = None
         self.num_shot = num_shot
         self.readout_freq_range = sweep_range
         self.readout_freq_step = sweep_step
         self.repetition_margin = repetition_margin
+        if fitting_option is None:
+            self.fitting_option = 'unwrap overcoupled'
+
+        else:
+            self.fitting_option = fitting_option
+
 
     def execute(self, tdm, calibration_notes,
                 update_experiment=True, update_analyze=True):
@@ -130,7 +136,7 @@ class FindCavityPeak(object):
         # fitting
         model = ResonatorReflectionModel()
         params = model.guess(
-            response, freq, electrical_delay_estimation="unwrap overcoupled")
+            response, freq, electrical_delay_estimation=self.fitting_option)
         rst = model.fit(response, params=params, omega=freq)
         param_list = [
             rst.params['a'].value,
