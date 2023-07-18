@@ -288,7 +288,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
             variables.variable_name_list = var_name_list
             variables.variable_list = var_list
-            variable.variable_size_list = var_size_list
+            variables.variable_size_list = var_size_list
             
             t = tuple(axis_dims)
             sweep_index = dim2index(t, shape_axis_groups)
@@ -534,3 +534,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             writer.backup_file([exp_file, __file__])
         writer.save_text("wiring.md", self.wiring_info)
         writer.save_dict("station_snapshot.json", self.station.snapshot())
+
+    def show_sweep_plan(self):
+        update_command = self.variables.update_command_list[-1]
+        self.sequence.update_variables(update_command)
+        self.sequence.draw()
