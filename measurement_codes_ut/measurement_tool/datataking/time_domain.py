@@ -191,7 +191,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
                     seq.update_variables(update_command)
                     
-                    for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
+                    for lo in (tqdm(lo_sweep_value, leave=False) if verbose else lo_sweep_value):
                         self.port[lo_sweep_key].set_frequency(lo)
                         # seq.draw()
                         raw_data = self.run(seq, as_complex=as_complex)
