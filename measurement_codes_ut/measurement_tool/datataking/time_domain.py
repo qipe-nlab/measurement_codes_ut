@@ -536,6 +536,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         writer.save_dict("station_snapshot.json", self.station.snapshot())
 
     def show_sweep_plan(self):
-        update_command = self.variables.update_command_list[-1]
-        self.sequence.update_variables(update_command)
-        self.sequence.draw()
+        if self.variables is None:
+            self.sequence.draw()
+        else:
+            update_command = self.variables.update_command_list[-1]
+            self.sequence.update_variables(update_command)
+            self.sequence.draw()
