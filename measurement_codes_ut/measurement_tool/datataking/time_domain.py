@@ -416,6 +416,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         # self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
+            for name, cur in self.current_source.items():
+                cur.output('on')
             for name, lo in self.lo.items():
                 try:
                     lo.output(True)
