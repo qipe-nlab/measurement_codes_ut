@@ -187,11 +187,12 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         with DDH5Writer(data, save_path, name=dataset_name) as writer:
             self.prepare_experiment(writer, exp_file)
-            for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
-                self.port[lo_sweep_key].set_frequency(lo)
-                if var_other:
-                    for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
-                        seq.update_variables(update_command)
+            if var_other:
+                for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
+                    seq.update_variables(update_command)
+                    
+                    for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
+                        self.port[lo_sweep_key].set_frequency(lo)
                         # seq.draw()
                         raw_data = self.run(seq, as_complex=as_complex)
                         write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
@@ -201,7 +202,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                                 write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                         writer.add_data(**write_dict)
 
-                else:
+            else:
+                for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
+                    self.port[lo_sweep_key].set_frequency(lo)
                     raw_data = self.run(seq, as_complex=as_complex)
                     write_dict = {}
                     write_dict[lo_sweep_key+"_LO_frequency"] = lo
