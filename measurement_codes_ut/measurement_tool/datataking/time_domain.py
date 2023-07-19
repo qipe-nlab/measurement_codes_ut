@@ -13,7 +13,7 @@ from qcodes_drivers.iq_corrector import IQCorrector
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
 from sequence_parser import Sequence, Variable, Variables
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 from sequence_parser.iq_port import IQPort
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from .instrument_manager import InstrumentManagerBase
@@ -345,7 +345,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     try:
                         waveform_corrected = self.IQ_corrector[port.name].correct(
                             waveform)
-                    except:
+                    except AttributeError:
                         waveform_corrected = [waveform.real, waveform.imag]
 
                     for _ in range(2):  # i or q
@@ -371,7 +371,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     acquire_end = int(acq_port.measurement_windows[-1][1])
                     assert acquire_start % dig_ch.sampling_interval() == 0
                     assert acquire_end % dig_ch.sampling_interval() == 0
-                dig_ch.points_per_cycle(1000)
+                acquire_len = (acquire_end - acquire_start) // (20*dig_ch.sampling_interval()) * 20
+                dig_ch.points_per_cycle(acquire_len)
                 dig_ch.delay(acquire_start //
                              dig_ch.sampling_interval())
 
@@ -386,7 +387,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 try:
                     waveform_corrected = self.IQ_corrector[key].correct(
                         waveform)
-                except:
+                except AttributeError:
                     i = waveform.real
                     q = waveform.imag
                     waveform_corrected = i, q
