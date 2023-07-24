@@ -86,7 +86,12 @@ class InstrumentManagerBase(object):
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
         elif "E50" in model:
-            raise ValueError("ENA E5071C is currently not supported.")
+            vna = E5071C("vna", vna_address)
+            vna.trigger_output_polarity("negative")
+            vna.trigger_output_position("after")
+            # vna.aux1.trigger_mode("point")
+            # vna.trigger_input_type("level")
+            vna.trigger_input_polarity("positive")
 
         
         vna.electrical_delay(0)  # s

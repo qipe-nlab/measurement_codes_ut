@@ -470,16 +470,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 return data_return
 
         finally:
-            self.hvi_trigger.output(False)
-            for awg in self.awg.values():
-                awg.stop_all()
-            for dig in self.digitizer_ch.values():
-                dig.stop()
-            for name, lo in self.lo.items():
-                try:
-                    lo.output(False)
-                except:
-                    lo.on()
+            self.stop()
 
     def stop(self):
         self.hvi_trigger.output(False)
@@ -487,8 +478,13 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             awg.stop_all()
         for dig in self.digitizer_ch.values():
             dig.stop()
-        for lo in self.lo.values():
-            lo.output(False)
+        for name, lo in self.lo.items():
+            try:
+                lo.output(False)
+            except:
+                lo.on()
+        for name, cur in self.current_source.items():
+            cur.output('off')
 
     def demodulate(self, data_all, averaging_waveform=True, as_complex=True):
         data_demod = {}

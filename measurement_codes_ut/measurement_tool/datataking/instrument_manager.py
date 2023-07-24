@@ -278,7 +278,8 @@ class InstrumentManagerBase(object):
         self.add_misc_control_line(
             port_name, lo_address, lo_power, awg_chasis, awg_slot, awg_channel, IQ_corrector, if_freq, sideband)
 
-    def add_current_source_bias_line(self, port_name: str,
+    def add_current_source_bias_line(self, 
+                                     port_name: str,
                                      current_source_address: str) -> None:
         """add current source line
         Args:
@@ -299,6 +300,81 @@ class InstrumentManagerBase(object):
         else:
             print(
                 f"Current source {current_source_address} already allocated.")
+            
+
+    def add_cross_resonance_line(self, port_name: str,
+                       port_name_source: str,
+                       awg_chasis: int,
+                       awg_slot: int,
+                       awg_channel: int,
+                       IQ_corrector,
+                       if_freq: float = 150e6,
+                       sideband: str = "lower") -> None:
+        lo = self.lo[port_name_source]
+        self.lo[port_name] = lo
+
+        self.awg_info['model'].append("M3202A")
+        self.awg_info['address'].append("")
+        self.awg_info['channel'].append(
+            f"chasis{awg_chasis} slot{awg_slot} ch{awg_channel}")
+        self.awg_info['port'].append(port_name)
+        if {'chasis': awg_chasis, 'slot': awg_slot} not in self.awg_ref.values():
+            awg = M3202A(f"awg_{self.awg_id}",
+                         chassis=awg_chasis, slot=awg_slot)
+            awg.channels.stop()
+            awg.flush_waveform()
+            self.station.add_component(awg)
+            self.awg[self.awg_id] = awg
+            ref_dict = {1: awg.ch1, 2: awg.ch2, 3: awg.ch3, 4: awg.ch4}
+            if isinstance(awg_channel, int):
+                awg_ch = ref_dict[awg_channel]
+            else:
+                awg_ch = ref_dict[awg_channel[0]], ref_dict[awg_channel[1]]
+
+            self.awg_ch[port_name] = self.awg_id, awg_ch
+            if IQ_corrector is None:
+                self.IQ_corrector[port_name] = None
+            else:
+                self.IQ_corrector[port_name] = IQCorrector(
+                    awg_ch[0],
+                    awg_ch[1],
+                    IQ_corrector["calibration_path"],
+                    lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
+                    rf_power_datetime=IQ_corrector["rf_power_datetime"],
+                    len_kernel=41,
+                    fit_weight=10,
+                )
+            self.awg_id += 1
+
+        else:
+            key = [k for k, v in self.awg_ref.items() if v == {
+                'chasis': awg_chasis, 'slot': awg_slot}][0]
+            idx = self.awg_ch[key][0]
+            awg = self.awg[idx]
+            ref_dict = {1: awg.ch1, 2: awg.ch2, 3: awg.ch3, 4: awg.ch4}
+            if isinstance(awg_channel, int):
+                awg_ch = ref_dict[awg_channel]
+            else:
+                awg_ch = ref_dict[awg_channel[0]], ref_dict[awg_channel[1]]
+            self.awg_ch[port_name] = idx, awg_ch
+            if IQ_corrector is None:
+                self.IQ_corrector[port_name] = None
+            else:
+                self.IQ_corrector[port_name] = IQCorrector(
+                    awg_ch[0],
+                    awg_ch[1],
+                    IQ_corrector["calibration_path"],
+                    lo_leakage_datetime=IQ_corrector["lo_leakage_datetime"],
+                    rf_power_datetime=IQ_corrector["rf_power_datetime"],
+                    len_kernel=41,
+                    fit_weight=10,
+                )
+
+        self.awg_ref[port_name] = {'chasis': awg_chasis, 'slot': awg_slot}
+        
+        self.port[port_name] = PortManager(
+            port_name, lo, if_freq, sideband)
+        
 
     def add_spectrum_analyzer(self, name="spectrum_analyzer", address='GPIB0::16::INSTR'):
         spectrum_analyzer = E4407B(name, address)
