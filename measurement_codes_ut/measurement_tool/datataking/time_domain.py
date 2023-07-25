@@ -24,7 +24,7 @@ from .port_manager import PortManager
 import matplotlib.pyplot as plt
 
 from measurement_codes_ut.measurement_tool import Session
-from measurement_codes_ut.wrapper import Dataset
+from measurement_codes_ut.measurement_tool.wrapper import Dataset
 
 logger = getLogger(__name__)
 
