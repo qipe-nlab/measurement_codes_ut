@@ -137,7 +137,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             dataset.load(num_files, save_path)
             data = dataset.data
 
-        return data
+        return dataset
     
     def take_data_lo_sweep(self, 
                   dataset_name: str, 
@@ -236,7 +236,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         dataset.load(num_files, save_path)
         data = dataset.data
 
-        return data
+        return dataset
 
 
     def set_variables(self, variables, sweep_axis):
