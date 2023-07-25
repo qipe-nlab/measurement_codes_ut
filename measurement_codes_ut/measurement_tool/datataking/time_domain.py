@@ -1,6 +1,6 @@
 import numpy as np
 from logging import getLogger
-
+import pathlib
 import numpy as np
 import itertools
 import copy
@@ -99,9 +99,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             data = DataDict(**var_dict)
             data.validate()
 
-
+            
             save_path = self.save_path + dataset_subpath + "/"
-
+            os.makedirs(save_path, exist_ok=True)
             
             files = os.listdir(save_path)
             file_date_all = [f + "/" for f in files]
@@ -133,18 +133,11 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 
             print(f"Experiment id. {num_files} completed.")
 
-            dataset = Dataset(self.session, save_path).load(num_files).data
+            dataset = Dataset(self.session)
+            dataset.load(num_files, save_path)
+            data = dataset.data
 
-            files = os.listdir(save_path)
-            date = files[-1] + '/'
-            files = os.listdir(save_path+date)
-            data_path = files[-1]
-
-            data_path_all = save_path+date+data_path + '/'
-
-            dataset = datadict_from_hdf5(data_path_all+"data")
-
-        return dataset
+        return data
     
     def take_data_lo_sweep(self, 
                   dataset_name: str, 
@@ -197,7 +190,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         data = DataDict(**var_dict)
         data.validate()
 
+        
+            
         save_path = self.save_path + dataset_subpath + "/"
+        os.makedirs(save_path, exist_ok=True)
         files = os.listdir(save_path)
         date = files[-1] + '/'
         num_files = len(os.listdir(save_path+date))
@@ -236,16 +232,11 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 
         print(f"Experiment id. {num_files} completed.")
 
-        files = os.listdir(save_path)
-        date = files[-1] + '/'
-        files = os.listdir(save_path+date)
-        data_path = files[-1]
+        dataset = Dataset(self.session)
+        dataset.load(num_files, save_path)
+        data = dataset.data
 
-        data_path_all = save_path+date+data_path + '/'
-
-        dataset = datadict_from_hdf5(data_path_all+"data")
-
-        return dataset
+        return data
 
 
     def set_variables(self, variables, sweep_axis):
