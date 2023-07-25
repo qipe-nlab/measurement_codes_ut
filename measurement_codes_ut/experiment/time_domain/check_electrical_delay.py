@@ -9,7 +9,7 @@ from tqdm import tqdm
 import time
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence, Circuit
+from sequence_parser import Port, Sequence
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
