@@ -24,6 +24,7 @@ from .port_manager import PortManager
 import matplotlib.pyplot as plt
 
 from measurement_codes_ut.measurement_tool import Session
+from measurement_codes_ut.wrapper import Dataset
 
 logger = getLogger(__name__)
 
@@ -98,9 +99,19 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             data = DataDict(**var_dict)
             data.validate()
 
+
             save_path = self.save_path + dataset_subpath + "/"
 
-            with DDH5Writer(data, save_path, name=dataset_name) as writer:
+            
+            files = os.listdir(save_path)
+            file_date_all = [f + "/" for f in files]
+            num_files = 0
+            for date in file_date_all:
+                num_files += len(os.listdir(save_path+date))
+
+            exp_name = f"{num_files:05}-{dataset_name}"
+
+            with DDH5Writer(data, save_path, name=exp_name) as writer:
                 self.prepare_experiment(writer, exp_file)
                 if var:
                     for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
@@ -120,6 +131,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                             write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                     writer.add_data(**write_dict)
                 
+            print(f"Experiment id. {num_files} completed.")
+
+            dataset = Dataset(self.session, save_path).load(num_files).data
 
             files = os.listdir(save_path)
             date = files[-1] + '/'
@@ -184,8 +198,14 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         data.validate()
 
         save_path = self.save_path + dataset_subpath + "/"
+        files = os.listdir(save_path)
+        date = files[-1] + '/'
+        num_files = len(os.listdir(save_path+date))
 
-        with DDH5Writer(data, save_path, name=dataset_name) as writer:
+        exp_name = f"{num_files:05}-{dataset_name}"
+
+
+        with DDH5Writer(data, save_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
             if var_other:
                 for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
@@ -213,6 +233,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                             write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                     writer.add_data(**write_dict)
 
+                
+        print(f"Experiment id. {num_files} completed.")
 
         files = os.listdir(save_path)
         date = files[-1] + '/'

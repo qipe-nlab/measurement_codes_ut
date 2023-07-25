@@ -42,18 +42,15 @@ class FindDispersiveShift(object):
         "dispersive_shift",
     ]
 
-    def __init__(self, num_shot=1000, repetition_margin=200e3, sweep_range=200e6, sweep_offset=-10e6, num_step: int = 51, fitting_option=None):
+    def __init__(self, num_shot=1000, repetition_margin=200e3, sweep_range=200e6, sweep_offset=-10e6, num_step: int = 51, model="unwrap overcoupled"):
         self.dataset = None
         self.num_shot = num_shot
         self.sweep_range = sweep_range
         self.sweep_offset = sweep_offset
         self.num_step = num_step
         self.repetition_margin = repetition_margin
-        if fitting_option is None:
-            self.fitting_option = 'unwrap overcoupled'
+        self.model = model
 
-        else:
-            self.fitting_option = fitting_option
     def execute(self, tdm, calibration_notes,
                 update_experiment=True, update_analyze=True):
         if update_experiment:
@@ -164,7 +161,7 @@ class FindDispersiveShift(object):
         for ge_index in range(2):
             model = ResonatorReflectionModel()
             params = model.guess(
-                response[ge_index, :], freq, electrical_delay_estimation=self.fitting_option)
+                response[ge_index, :], freq, electrical_delay_estimation=self.model)
             rst = model.fit(response[ge_index, :], params=params, omega=freq)
             pred = rst.best_fit
             fit_curve.append(pred)
@@ -198,6 +195,7 @@ class FindDispersiveShift(object):
         plotter.label("Frequency (Hz)", "G-E distance")
         plt.legend()
         plt.tight_layout()
+
         if savefig:
             plt.savefig(f"{savepath}/{self.data_path}.png")
         plt.show()

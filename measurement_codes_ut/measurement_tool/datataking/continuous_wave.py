@@ -13,6 +13,7 @@ import time
 import matplotlib.pyplot as plt
 
 from measurement_codes_ut.measurement_tool import Session
+from measurement_codes_ut.measurement_tool.wrapper import Dataset
 
 logger = getLogger(__name__)
 
@@ -125,8 +126,15 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         data.validate()
 
         save_path = self.save_path + dataset_subpath + "/"
+        files = os.listdir(save_path)
+        file_date_all = [f + "/" for f in files]
+        num_files = 0
+        for date in file_date_all:
+            num_files += len(os.listdir(save_path+date))
 
-        with DDH5Writer(data, data_path, name=dataset_name) as writer:
+        exp_name = f"{num_files:05}-{dataset_name}"
+
+        with DDH5Writer(data, data_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
 
             for cur in (tqdm(sweep['Current']) if sweep_flag['Current'] else [current_source.current()]):
@@ -154,14 +162,8 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
                         writer.add_data(**write_dict)
          
 
-        files = os.listdir(save_path)
-        date = files[-1] + '/'
-        files = os.listdir(save_path+date)
-        data_path = files[-1]
-
-        data_path_all = save_path+date+data_path + '/'
-
-        dataset = datadict_from_hdf5(data_path_all+"data")
+        print(f"Experiment id. {num_files} completed.")
+        dataset = Dataset(self.session, save_path).load(num_files).data
 
         return dataset
     

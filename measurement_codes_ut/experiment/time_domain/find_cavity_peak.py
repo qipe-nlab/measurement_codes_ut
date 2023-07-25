@@ -22,7 +22,6 @@ class FindCavityPeak(object):
     experiment_name = "FindCavityPeak"
     input_parameters = [
         'cavity_dressed_frequency_cw',
-        'cavity_dressed_frequency_linewidth_cw',
         "cavity_readout_sequence_amplitude_expected_sn",
         "cavity_readout_electrical_delay",
         "cavity_readout_trigger_delay",
@@ -34,18 +33,13 @@ class FindCavityPeak(object):
         "cavity_intrinsic_decay_rate",
     ]
 
-    def __init__(self, num_shot=1000, repetition_margin=50e3, sweep_range=50e6, sweep_step=51, fitting_option=None):
+    def __init__(self, num_shot=1000, repetition_margin=50e3, sweep_range=50e6, sweep_step=51, model="unwrap overcoupled"):
         self.dataset = None
         self.num_shot = num_shot
         self.readout_freq_range = sweep_range
         self.readout_freq_step = sweep_step
         self.repetition_margin = repetition_margin
-        if fitting_option is None:
-            self.fitting_option = 'unwrap overcoupled'
-
-        else:
-            self.fitting_option = fitting_option
-
+        self.model = model
 
     def execute(self, tdm, calibration_notes,
                 update_experiment=True, update_analyze=True):
@@ -123,12 +117,7 @@ class FindCavityPeak(object):
         freq = dataset["frequency"]["values"]
         signal = dataset["s11"]["values"]
 
-        cavity_dressed_frequency = note.cavity_dressed_frequency_cw
-        cavity_linewidth = note.cavity_dressed_frequency_linewidth_cw
         electrical_delay = note.cavity_readout_electrical_delay
-        readout_freq_start = cavity_dressed_frequency - self.readout_freq_range/2
-        readout_freq_end = cavity_dressed_frequency + self.readout_freq_range/2
-        readout_freq_num = self.readout_freq_step
 
         # delay correction
         response = signal * np.exp(-1.j * 2*np.pi*freq * electrical_delay)
@@ -136,7 +125,7 @@ class FindCavityPeak(object):
         # fitting
         model = ResonatorReflectionModel()
         params = model.guess(
-            response, freq, electrical_delay_estimation=self.fitting_option)
+            response, freq, electrical_delay_estimation=self.model)
         rst = model.fit(response, params=params, omega=freq)
         param_list = [
             rst.params['a'].value,
@@ -195,12 +184,13 @@ class FindCavityPeak(object):
         plot.change_plot(0, 2)
         plot.plot_complex(response, fit=response_fit)
         plot.label("I", 'Q')
-        plt.tight_layout()
+
         if savefig:
             os.makedirs(savepath, exist_ok=True)
             plt.savefig(
                 f"{savepath}/{self.data_path}.png",
                 bbox_inches='tight')
+        plt.tight_layout()
         plt.show()
 
         experiment_note = AttributeDict()

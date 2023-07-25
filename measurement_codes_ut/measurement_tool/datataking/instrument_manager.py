@@ -68,21 +68,22 @@ class InstrumentManagerBase(object):
         self.tags = ["TD", session.cooling_down_id, session.package_name]
         if save_path[-1] != "/" or save_path[-2:] != "\\":
             save_path += "\\"
-        self.save_path = save_path
+        self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}"
 
         self.trigger_address = trigger_address
         self.repetition_margin = 50000
         self.acquisition_delay = 0
         self.num_shot = 1000
 
-        hvi_trigger = HVI_Trigger(
-            "hvi_trigger", self.trigger_address, debug=False)
-        hvi_trigger.output(False)
-        hvi_trigger.digitizer_delay(self.acquisition_delay)
-        hvi_trigger.trigger_period(self.repetition_margin)
-        self.hvi_trigger = hvi_trigger
+        if trigger_address != "":
+            hvi_trigger = HVI_Trigger(
+                "hvi_trigger", self.trigger_address, debug=False)
+            hvi_trigger.output(False)
+            hvi_trigger.digitizer_delay(self.acquisition_delay)
+            hvi_trigger.trigger_period(self.repetition_margin)
+            self.hvi_trigger = hvi_trigger
 
-        self.station.add_component(hvi_trigger)
+            self.station.add_component(hvi_trigger)
 
         print("done")
 
@@ -220,6 +221,9 @@ class InstrumentManagerBase(object):
             IQ_corrector,
             if_freq: float
         """
+
+        if not "readout" in port_name:
+            raise ValueError(f'Port name must include "readout".')
 
         self.add_misc_control_line(
             port_name, lo_address, lo_power, awg_chasis, awg_slot, awg_channel, IQ_corrector, if_freq, sideband)
