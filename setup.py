@@ -3,7 +3,7 @@ from setuptools import setup, find_packages
 setup(
     name="measurement_codes_ut",
     packages=find_packages(),
-    version="1.0.7",
+    version="1.0.8",
     install_requires = [
         # Github Private Repository
         'plottr@git+https://github.com/qipe-nlab/plottr.git@search-datadict',
