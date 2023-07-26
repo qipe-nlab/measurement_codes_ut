@@ -126,8 +126,8 @@ dataset = tdm.take_data(dataset_name="test", dataset_subpath="test", as_complex=
 
 ### Plot
 ```python
-time = dataset['duration']['values']
-cplx = dataset['readout_acquire']['values']
+time = dataset.data['duration']['values']
+cplx = dataset.data['readout_acquire']['values']
 
 plt.figure()
 plt.plot(time, cplx.real, label='I')
