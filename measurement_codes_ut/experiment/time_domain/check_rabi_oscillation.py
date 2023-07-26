@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -71,6 +71,7 @@ class CheckRabiOscillation(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_dressed_frequency
 
@@ -80,66 +81,39 @@ class CheckRabiOscillation(object):
 
         tdm.port['qubit'].frequency = qubit_freq
 
-        dur_range = np.linspace(self.min_duration, self.max_duration,
-                                40, dtype=int)
+        dur_range = 2 * sorted(set(np.linspace(self.min_duration/2, self.max_duration/2,
+                                40, dtype=int)))
 
-        dur_range = np.array(sorted(set(dur_range)))
+        duration = Variable("duration", dur_range, "ns")
+        variables = Variables([duration])
 
-        seq_list = []
-        for dur in dur_range:
-            seq = Sequence(ports)
-            if dur % 2 != 0:
-                seq.add(Delay(1), qubit_port)
+        seq = Sequence(ports)
 
-            seq.add(FlatTop(Gaussian(amplitude=note.qubit_control_amplitude, fwhm=10, duration=20), top_duration=dur),
-                    qubit_port, copy=False)
-            seq.add(Delay(20), qubit_port)
-            seq.trigger(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        seq.add(FlatTop(Gaussian(amplitude=note.qubit_control_amplitude, fwhm=10, duration=20), top_duration=duration),
+                qubit_port, copy=False)
+        seq.add(Delay(20), qubit_port)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-            seq.trigger(ports)
-            seq_list.append(seq)
-        # seq.draw()
+        seq.trigger(ports)
 
-        data = DataDict(
-            duration=dict(unit="ns"),
-            s11=dict(axes=["duration"]),
-        )
-        data.validate()
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(seq_list)):
-                raw_data = tdm.run(
-                    seq, averaging_waveform=True, averaging_shot=True, as_complex=False)
-                writer.add_data(
-                    duration=dur_range[i],
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-        print(f"Experiment data saved in {self.data_path_all}")
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     # override
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        time = dataset["duration"]["values"]
-        response = dataset["s11"]["values"]
+        time = dataset.data["duration"]["values"]
+        response = dataset.data["readout_acquire"]["values"]
         response_cplx = response[:, 0] + 1j*response[:, 1]
 
         max_time_length = max(time)
-
-        # get trace
 
         pca = PCA()
         projected = pca.fit_transform(response)
@@ -169,7 +143,9 @@ class CheckRabiOscillation(object):
         time_fit = np.linspace(min(time), max(time), fit_slice)
         component_fit = model.predict(time_fit)
 
-        plotter = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+
+        plotter = PlotHelper(f"{self.data_label}", 1, 3)
         plotter.plot_complex(
             response_cplx, line_for_data=True)
         plotter.label('I', 'Q')
@@ -184,7 +160,7 @@ class CheckRabiOscillation(object):
         plotter.label("Duration (ns)", "Response")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png",
+            plt.savefig(f"{savepath}/{self.data_label}.png",
                         bbox_inches='tight')
         plt.show()
 

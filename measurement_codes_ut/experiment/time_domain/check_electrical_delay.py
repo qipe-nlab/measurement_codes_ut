@@ -61,6 +61,7 @@ class CheckElectricalDelay(object):
         ports = [readout_port, qubit_port, acq_port]
 
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
+        tdm.set_acquisition_mode(averaging_shot=True, averaging_waveform=True)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
 
@@ -73,49 +74,31 @@ class CheckElectricalDelay(object):
         # seq.draw()
         seq.trigger(ports)
 
-        data = DataDict(
-            frequency=dict(unit="Hz"),
-            s11=dict(axes=["frequency"]),
-        )
-        data.validate()
-
         shift = np.linspace((-self.sweep_range/2),
                             (self.sweep_range/2), self.sweep_step)
+        
+        tdm.port['readout'].frequency = readout_freq - 100e6 + shift
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, df in enumerate(tqdm(shift)):
-                time.sleep(0.1)
-                tdm.port['readout'].frequency = readout_freq - 100e6 + df
-                raw_data = tdm.run(
-                    seq, averaging_waveform=True, averaging_shot=True, as_complex=True)
-                writer.add_data(
-                    frequency=df,
-                    s11=raw_data['readout'],
-                )
+        tdm.sequence = seq
+        tdm.variables = None
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=True, exp_file=__file__)
+        # print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 
     # override
     def analyze(self, dataset, calibration_note, savefig=True, savepath="./fig"):
 
-        freq = dataset["frequency"]["values"]
-        signal = dataset["s11"]["values"]
+        freq = dataset.data["readout_LO_frequency"]["values"]
+        signal = dataset.data["readout_acquire"]["values"]
 
         phase = np.unwrap(np.angle(signal))
         a, b = np.polyfit(freq, phase, 1)
         electrical_delay = a / (2*np.pi)
 
-        plot = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+
+        plot = PlotHelper(f"{self.data_label}", 1, 3)
         plt.plot(freq, np.abs(signal), ".-", label="Amplitude")
         plot.label("Frequency shift (Hz)", "response")
 
@@ -133,7 +116,7 @@ class CheckElectricalDelay(object):
 
         if savefig:
             os.makedirs(savepath, exist_ok=True)
-            plt.savefig(f"{savepath}/{self.data_path}.png",
+            plt.savefig(f"{savepath}/{self.data_label}.png",
                         bbox_inches='tight')
         plt.show()
 

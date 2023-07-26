@@ -69,6 +69,7 @@ class FindQubitPeak(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetetion_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_dressed_frequency
 
@@ -96,35 +97,19 @@ class FindQubitPeak(object):
         shift = np.linspace(-self.qubit_freq_range/2,
                             self.qubit_freq_range/2, self.qubit_freq_step)
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, df in enumerate(tqdm(shift)):
-                time.sleep(1e-1)
-                tdm.port['qubit'].frequency = qubit_freq + df
-                raw_data = tdm.run(
-                    seq, averaging_waveform=True, averaging_shot=True, as_complex=False)
-                writer.add_data(
-                    frequency=qubit_freq + df,
-                    s11=raw_data['readout'],
-                )
+        tdm.port['qubit'].frequency = qubit_freq + shift
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
+        tdm.sequence = seq
+        tdm.variables = None
 
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
-
     # override
 
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        freq = dataset["frequency"]["values"]
-        signal = dataset["s11"]["values"]
+        freq = dataset.data["qubit_LO_frequency"]["values"]
+        signal = dataset.data["readout_acquire"]["values"]
 
         qubit_dressed_frequency = note.qubit_frequency_cw
         # qubit_full_linewidth = note.qubit_full_linewidth
@@ -157,8 +142,10 @@ class FindQubitPeak(object):
         fit_slice = 1001
         component_fit = model.predict(
             np.linspace(min(freq), max(freq), fit_slice))
+        
+        self.data_label = dataset.path.split("/")[-1][27:]
 
-        plot = PlotHelper(f"{self.data_path}", 1, 3)
+        plot = PlotHelper(f"{self.data_label}", 1, 3)
         plot.plot_complex(signal[:, 0] + 1.j *
                           signal[:, 1], line_for_data=True)
         plot.label("I", "Q")
@@ -173,7 +160,7 @@ class FindQubitPeak(object):
         plot.label("Frequency (Hz)", "Response")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png",
+            plt.savefig(f"{savepath}/{self.data_label}.png",
                         bbox_inches='tight')
         plt.show()
         ##### plot #####

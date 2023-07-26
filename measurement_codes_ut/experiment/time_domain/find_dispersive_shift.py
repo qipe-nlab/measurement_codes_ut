@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -76,12 +76,12 @@ class FindDispersiveShift(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_dressed_frequency
 
         qubit_freq = note.qubit_dressed_frequency
 
-        tdm.port['readout'].frequency = readout_freq
 
         tdm.port['qubit'].frequency = qubit_freq
 
@@ -89,58 +89,37 @@ class FindDispersiveShift(object):
 
         shift = np.linspace(self.sweep_offset - 0.5*self.sweep_range,
                             + self.sweep_offset + 0.5*self.sweep_range, self.num_step)
+        
+        tdm.port['readout'].frequency = readout_freq + shift
+        
+        amp_list = [0, pi_pulse_power]
+        
+        amplitude = Variable("amplitude", amp_list, "V")
+        variables = Variables([amplitude])
 
-        seq_list = []
-        for amp in [0, 1]:
-            seq = Sequence(ports)
-            seq.add(Gaussian(amplitude=pi_pulse_power*amp, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
-                    qubit_port, copy=False)
-            seq.add(Delay(10), qubit_port)
-            seq.trigger(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        seq = Sequence(ports)
+        seq.add(Gaussian(amplitude=amplitude, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(10), qubit_port)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-            seq.trigger(ports)
-            seq_list.append(seq)
+        seq.trigger(ports)
 
-        data = DataDict(
-            amplitude=dict(unit=""),
-            frequency=dict(unit="Hz"),
-            s11=dict(axes=["amplitude", 'frequency']),
-        )
-        data.validate()
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(seq_list):
-                for j, df in enumerate(tqdm(shift)):
-                    tdm.port['readout'].frequency = readout_freq + df
-                    raw_data = tdm.run(seq, averaging_shot=True,
-                                       averaging_waveform=True, as_complex=True)
-                    writer.add_data(
-                        amplitude=i,
-                        frequency=readout_freq + df,
-                        s11=raw_data['readout'],
-                    )
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=True, exp_file=__file__)
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        power = dataset['amplitude']['values']
-        freq = dataset['frequency']['values'][:self.num_step]
-        response = dataset["s11"]["values"].reshape(2, self.num_step)
+        freq = dataset.data['readout_LO_frequency']['values'][:self.num_step]
+        response = dataset.data["readout_acquire"]["values"].reshape(2, self.num_step)
 
         cavity_linewidth = note.cavity_external_decay_rate + \
             note.cavity_intrinsic_decay_rate
@@ -172,7 +151,8 @@ class FindDispersiveShift(object):
             if ge_index == 1:
                 cavity_dressed_frequency_e = rst.params['omega_0'].value
 
-        plotter = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plotter = PlotHelper(f"{self.data_label}", 1, 3)
         plotter.plot_complex(data=response[0, :], label="Ground")
         plotter.plot_complex(data=response[1, :], label="Excite")
         plotter.label("I", "Q")
@@ -197,7 +177,7 @@ class FindDispersiveShift(object):
         plt.tight_layout()
 
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png")
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
 
         experiment_note = AttributeDict()

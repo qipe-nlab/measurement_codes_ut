@@ -69,6 +69,7 @@ class FindCavityPeak(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         seq = Sequence(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
@@ -88,34 +89,21 @@ class FindCavityPeak(object):
         shift = np.linspace(-self.readout_freq_range/2,
                             self.readout_freq_range/2, self.readout_freq_step)
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, df in enumerate(tqdm(shift)):
-                time.sleep(0.1)
-                tdm.port['readout'].frequency = readout_freq + df
-                raw_data = tdm.run(
-                    seq, averaging_waveform=True, averaging_shot=True, as_complex=True)
-                writer.add_data(
-                    frequency=readout_freq + df,
-                    s11=raw_data['readout'],
-                )
+        tdm.port['readout'].frequency = readout_freq + shift
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
 
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
+        tdm.sequence = seq
+        tdm.variables = None
 
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=True, exp_file=__file__)
+
         return dataset
 
     # override
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        freq = dataset["frequency"]["values"]
-        signal = dataset["s11"]["values"]
+        freq = dataset.data["readout_LO_frequency"]["values"]
+        signal = dataset.data["readout_acquire"]["values"]
 
         electrical_delay = note.cavity_readout_electrical_delay
 
@@ -166,7 +154,9 @@ class FindCavityPeak(object):
         fit_slice = 1001
         freq_fit = np.linspace(min(freq), max(freq), fit_slice)
         response_fit = rst.eval(params=rst.params, omega=freq_fit)
-        plot = PlotHelper(f"{self.data_path}", 1, 3)
+
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plot = PlotHelper(f"{self.data_label}", 1, 3)
         plot.plot_fitting(freq, np.abs(response), y_fit=np.abs(
             response_fit), label="Amplitude")
         plot.label("Frequency (Hz)", "Magnitude")
@@ -188,7 +178,7 @@ class FindCavityPeak(object):
         if savefig:
             os.makedirs(savepath, exist_ok=True)
             plt.savefig(
-                f"{savepath}/{self.data_path}.png",
+                f"{savepath}/{self.data_label}.png",
                 bbox_inches='tight')
         plt.tight_layout()
         plt.show()

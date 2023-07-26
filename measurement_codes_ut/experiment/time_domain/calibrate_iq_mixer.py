@@ -29,7 +29,8 @@ class CalibrateIQMixer(object):
                  if_step: int,  # MHz
                  reference_level_rf=0,  # dBm
                  reference_level_leakage=-30,  # dBm
-                 i_amp=0.5, ):
+                 i_amp=0.5, 
+                 dataset_subpath='TD/'):
         self.dataset = {}
         self.target_port = target_port
         self.target_channel = target_channel
@@ -42,6 +43,7 @@ class CalibrateIQMixer(object):
         self.reference_level_rf = reference_level_rf
         self.reference_level_leakage = reference_level_leakage
         self.i_amp = i_amp
+        self.dataset_subpath = dataset_subpath
 
     def execute(self, tdm, check=True, update_tdm=True):
         if not hasattr(tdm, "spectrum_analyzer"):
@@ -88,9 +90,9 @@ class CalibrateIQMixer(object):
             lo.off()
 
         iq_corrector = IQCorrector(
-            self.awg_i,  # awg_q2 or awg2_q2
-            self.awg_i,  # awg_i2 or awg2_i2
-            tdm.save_path,
+            self.awg_i,  
+            self.awg_q, 
+            tdm.save_path+self.dataset_subpath,
             lo_leakage_datetime=self.lo_leakage_path,
             rf_power_datetime=self.rf_power_path,
             len_kernel=41,
@@ -119,7 +121,7 @@ class CalibrateIQMixer(object):
 
         name = f"iq_calibrator_lo_leakage_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
-        with DDH5Writer(data, tdm.save_path, name=name) as writer:
+        with DDH5Writer(data, tdm.save_path+self.dataset_subpath, name=name) as writer:
             tdm.prepare_experiment(writer, __file__)
             iteration = 0
 
@@ -146,13 +148,14 @@ class CalibrateIQMixer(object):
                     xatol=1e-4,
                 ),
             ).x
+            
             measure(self.i_offset, self.q_offset)
-            files = os.listdir(tdm.save_path)
+            files = os.listdir(tdm.save_path+self.dataset_subpath)
             date = files[-1] + '/'
-            files = os.listdir(tdm.save_path+date)
+            files = os.listdir(tdm.save_path+self.dataset_subpath+date)
             data_path = files[-1]
 
-            data_path_all = tdm.save_path+date+data_path + '/'
+            data_path_all = tdm.save_path+self.dataset_subpath+date+data_path + '/'
 
             print(f"lo_leakage saved in {data_path_all}")
             dataset = datadict_from_hdf5(data_path_all+"data")
@@ -206,7 +209,7 @@ class CalibrateIQMixer(object):
         name = f"iq_calibrator_image_sideband_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
         try:
-            with DDH5Writer(data, tdm.save_path, name=name) as writer:
+            with DDH5Writer(data, tdm.save_path+self.dataset_subpath, name=name) as writer:
                 tdm.prepare_experiment(writer, __file__)
 
                 for i in tqdm(range(len(self.if_freqs))):
@@ -276,7 +279,7 @@ class CalibrateIQMixer(object):
         name = f"iq_calibrator_rf_power_slot{self.awg.slot_number()}_ch{self.awg_i.channel}_ch{self.awg_q.channel}"
 
         try:
-            with DDH5Writer(data, tdm.save_path, name=name) as writer:
+            with DDH5Writer(data, tdm.save_path+self.dataset_subpath, name=name) as writer:
 
                 tdm.prepare_experiment(writer, __file__)
 
@@ -296,12 +299,12 @@ class CalibrateIQMixer(object):
                     )
         finally:
             self.awg.stop_all()
-            files = os.listdir(tdm.save_path)
+            files = os.listdir(tdm.save_path+self.dataset_subpath)
             date = files[-1] + '/'
-            files = os.listdir(tdm.save_path+date)
+            files = os.listdir(tdm.save_path+self.dataset_subpath+date)
             data_path = files[-1]
 
-            data_path_all = tdm.save_path+date+data_path + '/'
+            data_path_all = tdm.save_path+self.dataset_subpath+date+data_path + '/'
 
             print(f"rf_power data saved in {data_path_all}")
             dataset = datadict_from_hdf5(data_path_all+"data")
@@ -310,9 +313,9 @@ class CalibrateIQMixer(object):
 
     def iq_mixer_check(self, tdm):
         iq_corrector = IQCorrector(
-            self.awg_i,  # awg_q2 or awg2_q2
-            self.awg_i,  # awg_i2 or awg2_i2
-            tdm.save_path,
+            self.awg_i,  
+            self.awg_q, 
+            tdm.save_path+self.dataset_subpath,
             lo_leakage_datetime=self.lo_leakage_path,
             rf_power_datetime=self.rf_power_path,
             len_kernel=41,
@@ -326,7 +329,7 @@ class CalibrateIQMixer(object):
 
         iq_corrector.check(
             files=[__file__],
-            data_path=tdm.save_path,
+            data_path=tdm.save_path+self.dataset_subpath,
             wiring=tdm.wiring_info,
             station=tdm.station,
             awg=self.awg,
@@ -336,12 +339,12 @@ class CalibrateIQMixer(object):
             amps=np.linspace(0.1, 1.4, 14),
             reference_level=0,  # dBm
         )
-        files = os.listdir(tdm.save_path)
+        files = os.listdir(tdm.save_path+self.dataset_subpath)
         date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
+        files = os.listdir(tdm.save_path+self.dataset_subpath+date)
         data_path = files[-1]
 
-        data_path_all = tdm.save_path+date+data_path + '/'
+        data_path_all = tdm.save_path+self.dataset_subpath+date+data_path + '/'
 
         print(f"IQ mixer check data saved in {data_path_all}")
         dataset = datadict_from_hdf5(data_path_all+"data")

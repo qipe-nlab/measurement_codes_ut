@@ -68,7 +68,7 @@ class InstrumentManagerBase(object):
         self.tags = ["TD", session.cooling_down_id, session.package_name]
         if save_path[-1] != "/" or save_path[-2:] != "\\":
             save_path += "/"
-        self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}"
+        self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}/"
 
         self.trigger_address = trigger_address
         self.repetition_margin = 50000

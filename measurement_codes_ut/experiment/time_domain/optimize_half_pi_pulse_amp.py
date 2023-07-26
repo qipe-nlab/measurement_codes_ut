@@ -9,7 +9,7 @@ from tqdm import tqdm
 from measurement_codes_ut.util import LPF
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -69,6 +69,7 @@ class OptimizeHalfPiAmp(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_readout_frequency
 
@@ -84,70 +85,46 @@ class OptimizeHalfPiAmp(object):
 
         amp_range = self.amp_range
         phase_list = [0, np.pi]
-        seq_list = []
-        for phase in phase_list:
-            seq_list_in = []
-            for amp in amp_range:
-                seq = Sequence(ports)
-                rx90 = Sequence(ports)
-                with rx90.align(qubit_port, 'left'):
-                    rx90.add(Gaussian(amplitude=amp, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                             qubit_port, copy=False)
-                    rx90.add(Deriviative(Gaussian(amplitude=1j*amp*note.half_pi_pulse_drag, fwhm=half_pi_pulse_length /
-                                                  3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
-                for _ in range(4*self.rep):
-                    seq.call(rx90)
 
-                seq.add(VirtualZ(-phase), qubit_port)
-                seq.call(rx90)
-                seq.add(VirtualZ(phase), qubit_port)
+        amplitude = Variable("amplitude", self.amp_range, "V")
+        phase = Variable("phase", phase_list, "V")
+        variables = Variables([phase, amplitude])
 
-                seq.trigger(ports)
+        seq = Sequence(ports)
+        rx90 = Sequence(ports)
+        with rx90.align(qubit_port, 'left'):
+            rx90.add(Gaussian(amplitude=amplitude, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
+                        qubit_port, copy=False)
+            rx90.add(Deriviative(Gaussian(amplitude=1j*amplitude*note.half_pi_pulse_drag, fwhm=half_pi_pulse_length /
+                                            3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
+        for _ in range(4*self.rep):
+            seq.call(rx90)
 
-                seq.add(ResetPhase(phase=0), readout_port, copy=False)
-                seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
-                        readout_port, copy=False)
-                seq.add(Acquire(duration=2000), acq_port)
+        seq.add(VirtualZ(-phase), qubit_port)
+        seq.call(rx90)
+        seq.add(VirtualZ(phase), qubit_port)
 
-                seq.trigger(ports)
-                seq_list_in.append(seq)
-            seq_list.append(seq_list_in)
+        seq.trigger(ports)
+
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
+
+        seq.trigger(ports)
         # seq.draw()
 
-        data = DataDict(
-            amplitude=dict(unit=""),
-            phase=dict(unit="rad"),
-            s11=dict(axes=["amplitude", "phase"]),
-        )
-        data.validate()
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq_list_in in enumerate((seq_list)):
-                for j, seq in enumerate(tqdm(seq_list_in)):
-                    raw_data = tdm.run(seq, averaging_waveform=True,
-                                       averaging_shot=True, as_complex=False)
-                    writer.add_data(
-                        amplitude=amp_range[j],
-                        phase=phase_list[i],
-                        s11=raw_data['readout'],
-                    )
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 
-    def analyze(self, dataset, note):
+    def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
         amp_range = self.amp_range
-        response = dataset['s11']['values'].reshape(2, len(self.amp_range), 2)
+        response = dataset['readout_acquire']['values'].reshape(2, len(self.amp_range), 2)
 
         pm_label = ["+", "-"]
         ge_label = ["0", "1"]
@@ -168,7 +145,9 @@ class OptimizeHalfPiAmp(object):
         plot_amp = np.linspace(amp_range[0], amp_range[-1], 101)
 
         plt.figure(figsize=(8, 6))
-        plt.title(f"{self.data_path}")
+
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plt.title(f"{self.data_label}")
 
         fit_params = {}
         for key, val in component_dict.items():
@@ -185,6 +164,9 @@ class OptimizeHalfPiAmp(object):
         plt.ylabel('Pauli Z')
         # plt.ylim(-1, 1)
         plt.legend()
+
+        if savefig:
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
 
         width = 0.5*(np.max(amp_range) - np.min(amp_range))

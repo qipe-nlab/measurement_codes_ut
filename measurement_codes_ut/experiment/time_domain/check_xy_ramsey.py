@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -74,6 +74,7 @@ class CheckXYRamsey(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_readout_frequency
 
@@ -87,70 +88,42 @@ class CheckXYRamsey(object):
 
         num_sample = 50
         delay_range = np.arange(
-            self.min_duration, self.max_duration, num_sample, dtype=int)
+            self.min_duration/2, self.max_duration/2, num_sample, dtype=int) * 2
         delay_range = np.array(sorted(set(delay_range)))
         self.len_data = len(delay_range)
         phase_list = [np.pi, np.pi/2]
 
         half_pi_pulse_power = 0.5 * note.pi_pulse_power
 
-        seq_list = []
-        for phase in phase_list:
-            seq_list_in = []
-            for delay in delay_range:
-                seq = Sequence(ports)
-                if delay % 2 != 0:
-                    seq.add(Delay(1), qubit_port)
-                seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
-                        qubit_port, copy=False)
-                seq.add(Delay(delay), qubit_port)
-                seq.add(VirtualZ(phase), qubit_port)
-                seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
-                        qubit_port, copy=False)
-                seq.trigger(ports)
-                seq.add(ResetPhase(phase=0), readout_port, copy=False)
-                seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
-                        readout_port, copy=False)
-                seq.add(Acquire(duration=2000), acq_port)
+        delay = Variable("duration", delay_range, "ns")
+        phase = Variable("phase", phase_list, "rad")
+        variables = Variables([delay, phase])
 
-                seq.trigger(ports)
-                seq_list_in.append(seq)
-            seq_list.append(seq_list_in)
+        seq = Sequence(ports)
+        seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(delay), qubit_port)
+        seq.add(VirtualZ(phase), qubit_port)
+        seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-        data = DataDict(
-            phase=dict(unit='rad'),
-            delay=dict(unit="ns"),
-            s11=dict(axes=["phase", "delay"]),
-        )
-        data.validate()
+        seq.trigger(ports)
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq_list_in in enumerate(seq_list):
-                for j, seq in enumerate(tqdm(seq_list_in)):
-                    raw_data = tdm.run(seq, averaging_shot=True,
-                                       averaging_waveform=True, as_complex=False)
-                    writer.add_data(
-                        phase=phase_list[i],
-                        delay=delay_range[j],
-                        s11=raw_data['readout'],
-                    )
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__, sweep_axis=[1,0])
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        tdata = dataset['delay']['values'][:self.len_data]
-        response = dataset['s11']['values'].reshape(
+        tdata = dataset.data['delay']['values'][:self.len_data]
+        response = dataset.data['readout_acquire']['values'].reshape(
             2, self.len_data, 2)  # phase, delay, IQ
 
         xdata = response[0]
@@ -165,9 +138,11 @@ class CheckXYRamsey(object):
         phase = np.unwrap(np.angle(paulix + 1j*pauliy))
         a, b = np.polyfit(tdata, phase, 1)
         detuning = a/(2*np.pi)*1e9
+        
+        self.data_label = dataset.path.split("/")[-1][27:]
 
         plt.figure(figsize=(15, 5))
-        plt.suptitle(f"{self.data_path}")
+        plt.suptitle(f"{self.data_label}")
         plt.subplot(131)
         plt.plot(xdata[:, 0], xdata[:, 1], ".-", label="X")
         plt.plot(ydata[:, 0], ydata[:, 1], ".-", label="Y")
@@ -190,11 +165,11 @@ class CheckXYRamsey(object):
         plt.grid()
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}_1.png")
+            plt.savefig(f"{savepath}/{self.data_label}_1.png")
         plt.show()
 
         plt.figure(figsize=(10, 5))
-        plt.suptitle(f"{self.data_path}")
+        plt.suptitle(f"{self.data_label}")
         plt.subplot(121)
         plt.plot(tdata, paulix, label="X")
         plt.plot(tdata, pauliy, label="Y")
@@ -223,7 +198,7 @@ class CheckXYRamsey(object):
         plt.axvline(self.hand_detune, color="black", linestyle="--")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}_2.png")
+            plt.savefig(f"{savepath}/{self.data_label}_2.png")
         plt.show()
 
         experiment_note = AttributeDict()

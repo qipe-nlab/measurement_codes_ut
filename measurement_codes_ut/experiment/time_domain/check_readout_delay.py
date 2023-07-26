@@ -51,6 +51,7 @@ class CheckReadoutDelay(object):
         readout_freq = note.cavity_dressed_frequency_cw
 
         readout_port = tdm.port['readout'].port
+        self.r_if = readout_port.if_freq
         acq_port = tdm.acquire_port['readout_acquire']
         qubit_port = tdm.port['qubit'].port
 
@@ -61,8 +62,8 @@ class CheckReadoutDelay(object):
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_acquisition_delay(0)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=False, averaging_shot=True)
 
-        sequences = []
         seq = Sequence(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.trigger(ports)
@@ -71,41 +72,21 @@ class CheckReadoutDelay(object):
         seq.add(Acquire(duration=2000), acq_port)
         # seq.draw()
         seq.trigger(ports)
-        sequences.append(seq)
 
-        data = DataDict(
-            time=dict(unit="ns"),
-            s11=dict(axes=["time"]),
-        )
-        data.validate()
+        tdm.sequence = seq
+        tdm.varibales = None
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(sequences)):
-                raw_data = tdm.run(
-                    seq, averaging_waveform=False, averaging_shot=True, as_complex=False)
-                writer.add_data(
-                    time=2*np.arange(len(raw_data['readout'])),
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     # override
     def analyze(self, dataset, calibration_note, savefig=True, savepath="./fig"):
-        time = dataset["time"]["values"]
-        signal = dataset["s11"]["values"]
-        ma_length = 16
-        convolve_length = 40
+        time = np.arange(1000)*2
+        signal = dataset.data["readout_acquire"]["values"]
+        ma_length = int(1/self.r_if)
+        convolve_length = int(max(time)/100)
+
+        self.data_label = dataset.path.split("/")[-1][27:]
 
         # analysis
         pca_model = PCA()
@@ -125,7 +106,7 @@ class CheckReadoutDelay(object):
         signal_ma_q = np.convolve(
             signal[:, 1], np.ones(ma_length)/ma_length, "valid")
 
-        plot = PlotHelper(title=f"{self.data_path}", columns=1)
+        plot = PlotHelper(title=f"{self.data_label}", columns=1)
         # plot.plot(time, signal[:, 0], label="I")
         # plot.plot(time, signal[:, 1], label="Q")
         plot.plot(time[ma_length-1:], signal_ma_i, label="I")
@@ -145,7 +126,7 @@ class CheckReadoutDelay(object):
 
         if savefig:
             os.makedirs(savepath, exist_ok=True)
-            plt.savefig(f"{savepath}/{self.data_path}.png",
+            plt.savefig(f"{savepath}/{self.data_label}.png",
                         bbox_inches='tight')
         plt.show()
 

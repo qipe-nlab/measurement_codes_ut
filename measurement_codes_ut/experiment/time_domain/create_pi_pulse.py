@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -67,6 +67,7 @@ class CreatePiPulse(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_dressed_frequency
 
@@ -83,52 +84,30 @@ class CreatePiPulse(object):
 
         amp_range = np.linspace(0.0, max_power, self.num_point)
 
-        seq_list = []
-        for amp in amp_range:
-            seq = Sequence(ports)
-            seq.add(Gaussian(amplitude=amp, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
-                    qubit_port, copy=False)
-            seq.add(Delay(10), qubit_port)
-            seq.trigger(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        amplitude = Variable("amplitude", amp_range, "V")
+        variables = Variables([amplitude])
 
-            seq.trigger(ports)
-            seq_list.append(seq)
+        seq = Sequence(ports)
+        seq.add(Gaussian(amplitude=amplitude, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(10), qubit_port)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-        data = DataDict(
-            amplitude=dict(unit=""),
-            s11=dict(axes=["amplitude"]),
-        )
-        data.validate()
+        seq.trigger(ports)
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(seq_list)):
-                raw_data = tdm.run(seq, averaging_shot=True,
-                                   averaging_waveform=True, as_complex=False)
-                writer.add_data(
-                    amplitude=amp_range[i],
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        power = dataset['amplitude']['values']
-        response = dataset["s11"]["values"]
+        power = dataset.data['amplitude']['values']
+        response = dataset.data["readout_acquire"]["values"]
 
         pca = PCA()
         projected = pca.fit_transform(response)
@@ -159,7 +138,8 @@ class CreatePiPulse(object):
         #     pi_pulse_power = 0.999
         #     logger.warning(f"pi_pulse_power is set{pi_pulse_power} > 1.0, so this is set 0.999. Fitting would fail.")
 
-        plotter = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plotter = PlotHelper(f"{self.data_label}", 1, 3)
         plotter.plot_complex(
             response[:, 0] + 1.j * response[:, 1], line_for_data=True)
         plotter.label("I", "Q")
@@ -176,7 +156,7 @@ class CreatePiPulse(object):
         plotter.label("Pulse amplitude", "Response")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png")
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
 
         experiment_note = AttributeDict()

@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variables, Variable
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -74,6 +74,7 @@ class CheckT1Decay(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_readout_frequency
 
@@ -91,51 +92,28 @@ class CheckT1Decay(object):
         time_step = self.num_sample
         min_dur_base2 = np.log2(self.min_duration)
         max_dur_base2 = np.log2(self.max_duration)
-        time_range = np.logspace(
-            min_dur_base2, max_dur_base2, time_step, base=2, dtype=int)
+        time_range = (np.logspace(
+            min_dur_base2, max_dur_base2, time_step, base=2)/2).astype(int)*2
+        
+        duration = Variable("duration", time_range, "ns")
+        variables = Variables([duration])
 
-        seq_list = []
-        for dur in time_range:
-            seq = Sequence(ports)
-            if dur % 2 != 0:
-                seq.add(Delay(1), qubit_port)
-            seq.add(Gaussian(amplitude=pi_pulse_power, fwhm=pi_pulse_length/3, duration=pi_pulse_length, zero_end=True),
-                    qubit_port, copy=False)
-            seq.add(Delay(dur), qubit_port)
-            seq.trigger(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        seq = Sequence(ports)
+        seq.add(Gaussian(amplitude=pi_pulse_power, fwhm=pi_pulse_length/3, duration=pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(duration), qubit_port)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-            seq.trigger(ports)
-            seq_list.append(seq)
+        seq.trigger(ports)
 
-        data = DataDict(
-            time=dict(unit="ns"),
-            s11=dict(axes=["time"]),
-        )
-        data.validate()
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(seq_list)):
-                raw_data = tdm.run(seq, averaging_shot=True,
-                                   averaging_waveform=True, as_complex=False)
-                writer.add_data(
-                    time=time_range[i],
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
@@ -143,8 +121,8 @@ class CheckT1Decay(object):
         def t1(x, a0, t0, b0):
             return a0*np.exp(-x/t0) + b0
 
-        time = dataset['time']['values']
-        response = dataset['s11']['values']
+        time = dataset.data['duration']['values']
+        response = dataset.data['readout_acquire']['values']
 
         pca = PCA()
         pca.fit(response)
@@ -164,7 +142,9 @@ class CheckT1Decay(object):
 
         component_fit = t1(time, *popt)
 
-        plotter = PlotHelper(f"{self.data_path}", 1, 2)
+        self.data_label = dataset.path.split("/")[-1][27:]
+
+        plotter = PlotHelper(f"{self.data_label}", 1, 2)
         plotter.plot_complex(
             data=response[:, 0]+1j*response[:, 1], label="data")
         plotter.label("I", "Q")
@@ -176,7 +156,7 @@ class CheckT1Decay(object):
         plotter.label("Time (ns)", "Response")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png")
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
 
         experiment_note = AttributeDict()

@@ -69,14 +69,13 @@ class FindGFPeak(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_dressed_frequency
 
         qubit_freq = note.qubit_dressed_frequency
 
         tdm.port['readout'].frequency = readout_freq
-
-        tdm.port['qubit'].frequency = qubit_freq
 
         expected_qubit_frequency_gf = note.qubit_dressed_frequency + \
             self.expected_anharmonicity / 2.
@@ -94,39 +93,18 @@ class FindGFPeak(object):
 
         seq.trigger(ports)
 
-        data = DataDict(
-            frequency=dict(unit="Hz"),
-            s11=dict(axes=["frequency"]),
-        )
-        data.validate()
+        tdm.port['qubit'].frequency = expected_qubit_frequency_gf + shift
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, df in enumerate(tqdm(shift)):
-                time.sleep(0.1)
-                tdm.port['qubit'].frequency = expected_qubit_frequency_gf + df
-                raw_data = tdm.run(seq, averaging_shot=True,
-                                   averaging_waveform=True, as_complex=False)
-                writer.add_data(
-                    frequency=expected_qubit_frequency_gf + df,
-                    s11=raw_data['readout'],
-                )
+        tdm.sequence = seq
+        tdm.variables = None
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        freq = dataset["frequency"]["values"]
-        response = dataset["s11"]["values"]
+        freq = dataset.data["qubit_LO_frequency"]["values"]
+        response = dataset.data["readout_acquire"]["values"]
 
         expected_gf_freq = note.qubit_dressed_frequency + self.expected_anharmonicity/2.
 
@@ -156,7 +134,8 @@ class FindGFPeak(object):
         component_fit = model.predict(
             np.linspace(min(freq), max(freq), fit_slice))
 
-        plot = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plot = PlotHelper(f"{self.data_label}", 1, 3)
         plot.plot_complex(response[:, 0] + 1.j *
                           response[:, 1], line_for_data=True)
         plot.label("I", "Q")
@@ -171,7 +150,7 @@ class FindGFPeak(object):
         plot.label("Drive frequency (Hz)", "Response")
         plt.tight_layout()
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png")
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
         ##### plot #####
 

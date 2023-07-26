@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -79,6 +79,7 @@ class CheckT2Ramsey(object):
 
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
         tdm.set_shots(self.num_shot)
 
         readout_freq = note.cavity_readout_frequency
@@ -96,58 +97,36 @@ class CheckT2Ramsey(object):
 
         time_step = self.num_sample
         time_range = np.linspace(
-            self.min_duration, self.max_duration, time_step, dtype=int)
+            self.min_duration/2, self.max_duration/2, time_step, dtype=int) * 2
+        
+        duration = Variable("duration", time_range, "ns")
+        variables = Variables([duration])
+        seq = Sequence(ports)
+        if dur % 2 != 0:
+            seq.add(Delay(1), qubit_port)
+        seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(duration), qubit_port)
+        seq.add(Gaussian(amplitude=-half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-        seq_list = []
-        for dur in time_range:
-            seq = Sequence(ports)
-            if dur % 2 != 0:
-                seq.add(Delay(1), qubit_port)
-            seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                    qubit_port, copy=False)
-            seq.add(Delay(dur), qubit_port)
-            seq.add(Gaussian(amplitude=-half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                    qubit_port, copy=False)
-            seq.trigger(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        seq.trigger(ports)
 
-            seq.trigger(ports)
-            seq_list.append(seq)
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        data = DataDict(
-            time=dict(unit="ns"),
-            s11=dict(axes=["time"]),
-        )
-        data.validate()
-
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(seq_list)):
-                raw_data = tdm.run(seq, averaging_waveform=True,
-                                   averaging_shot=True, as_complex=False)
-                writer.add_data(
-                    time=time_range[i],
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        time = dataset['time']['values']
-        response = dataset['s11']['values']
+        time = dataset.data['duration']['values']
+        response = dataset.data['readout_acquire']['values']
 
         pca = PCA()
         projected = pca.fit_transform(response)
@@ -195,7 +174,9 @@ class CheckT2Ramsey(object):
         time_fit = np.linspace(self.min_duration, self.max_duration, fit_slice)
         component_fit = rst.best_fit
 
-        plotter = PlotHelper(f"{self.data_path}", 1, 3)
+        self.data_label = dataset.path.split("/")[-1][27:]
+
+        plotter = PlotHelper(f"{self.data_label}", 1, 3)
         plotter.plot_complex(
             response[:, 0]+1j*response[:, 1], line_for_data=True)
         plotter.label("I", "Q")
@@ -211,7 +192,7 @@ class CheckT2Ramsey(object):
         plt.tight_layout()
         if savefig:
             plt.savefig(
-                f"{savepath}/{self.data_path}.png")
+                f"{savepath}/{self.data_label}.png")
         plt.show()
 
         experiment_note = AttributeDict()

@@ -8,7 +8,7 @@ from tqdm import tqdm
 from measurement_codes_ut.util import LPF
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -68,6 +68,7 @@ class OptimizeHalfPiDRAG(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         readout_freq = note.cavity_readout_frequency
 
@@ -84,74 +85,51 @@ class OptimizeHalfPiDRAG(object):
 
         drag_range = self.drag_range
         phase_list = [np.pi/2, -np.pi/2]
-        seq_list = []
-        for phase in phase_list:
-            seq_list_in = []
-            for drag in drag_range:
-                seq = Sequence(ports)
-                rx90 = Sequence(ports)
-                with rx90.align(qubit_port, 'left'):
-                    rx90.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
-                             qubit_port, copy=False)
-                    rx90.add(Deriviative(Gaussian(amplitude=1j*half_pi_pulse_power*drag, fwhm=half_pi_pulse_length /
-                                                  3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
 
-                seq.call(rx90)
-                for _ in range(self.rep):
-                    seq.call(rx90)
-                    seq.add(VirtualZ(-np.pi), qubit_port)
-                    seq.call(rx90)
-                    seq.add(VirtualZ(np.pi), qubit_port)
+        drag = Variable("drag", self.drag_range, "V")
+        phase = Variable("phase", phase_list, "V")
+        variables = Variables([phase, drag])
 
-                seq.add(VirtualZ(-phase), qubit_port)
-                seq.call(rx90)
-                seq.add(VirtualZ(phase), qubit_port)
+        seq = Sequence(ports)
+        rx90 = Sequence(ports)
+        with rx90.align(qubit_port, 'left'):
+            rx90.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
+                        qubit_port, copy=False)
+            rx90.add(Deriviative(Gaussian(amplitude=1j*half_pi_pulse_power*drag, fwhm=half_pi_pulse_length /
+                                            3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
 
-                seq.trigger(ports)
+        seq.call(rx90)
+        for _ in range(self.rep):
+            seq.call(rx90)
+            seq.add(VirtualZ(-np.pi), qubit_port)
+            seq.call(rx90)
+            seq.add(VirtualZ(np.pi), qubit_port)
 
-                seq.add(ResetPhase(phase=0), readout_port, copy=False)
-                seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
-                        readout_port, copy=False)
-                seq.add(Acquire(duration=2000), acq_port)
+        seq.add(VirtualZ(-phase), qubit_port)
+        seq.call(rx90)
+        seq.add(VirtualZ(phase), qubit_port)
 
-                seq.trigger(ports)
-                seq_list_in.append(seq)
-            seq_list.append(seq_list_in)
+        seq.trigger(ports)
+
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
+
+        seq.trigger(ports)
         # seq.draw()
-        data = DataDict(
-            phase=dict(unit="rad"),
-            drag=dict(unit=""),
-            s11=dict(axes=["drag", "phase"]),
-        )
-        data.validate()
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq_list_in in enumerate(seq_list):
-                for j, seq in enumerate(tqdm(seq_list_in)):
-                    raw_data = tdm.run(seq, averaging_waveform=True,
-                                       averaging_shot=True, as_complex=False)
-                    writer.add_data(
-                        drag=drag_range[j],
-                        phase=phase_list[i],
-                        s11=raw_data['readout'],
-                    )
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
 
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-        print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 
-    def analyze(self, dataset, note):
+    def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        drag_range = dataset['drag']['values'][:len(self.drag_range)]
-        response = dataset['s11']['values'].reshape(2, len(self.drag_range), 2)
+        drag_range = dataset.data['drag']['values'][:len(self.drag_range)]
+        response = dataset.data['readout_acquire']['values'].reshape(2, len(self.drag_range), 2)
         pm_label = ["+", "-"]
 
         response_dict = {
@@ -171,7 +149,9 @@ class OptimizeHalfPiDRAG(object):
         plot_coeff = np.linspace(coeff[0], coeff[-1], 1001)
 
         plt.figure(figsize=(8, 6))
-        plt.title(f"{self.data_path}")
+
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plt.title(f"{self.data_label}")
 
         sm_val = []
         for i, (key, val) in enumerate(component_dict.items()):
@@ -186,6 +166,9 @@ class OptimizeHalfPiDRAG(object):
         plt.ylabel('Pauli Z')
         # plt.ylim(-1, 1)
         plt.legend()
+        
+        if savefig:
+            plt.savefig(f"{savepath}/{self.data_label}.png")
         plt.show()
 
         width = 0.5*(np.max(coeff) - np.min(coeff))

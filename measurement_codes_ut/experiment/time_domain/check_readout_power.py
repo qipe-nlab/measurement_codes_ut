@@ -7,7 +7,7 @@ from plottr.data.datadict_storage import DataDict, DDH5Writer
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Sequence
+from sequence_parser import Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -62,52 +62,32 @@ class CheckReadoutPower(object):
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_acquisition_delay(1000)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=False)
 
         amplitude_list = [0.0, self.default_readout_amplitude]
+        amplitude = Variable("amplitude", amplitude_list, "V")
+        variables = Variables([amplitude])
 
-        sequences = []
-        for amplitude in amplitude_list:
-            seq = Sequence(ports)
-            seq.add(ResetPhase(phase=0), readout_port, copy=False)
-            seq.trigger(ports)
-            seq.add(Square(amplitude=amplitude, duration=2000),
-                    readout_port, copy=False)
-            seq.add(Acquire(duration=2000), acq_port)
+        seq = Sequence(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.trigger(ports)
+        seq.add(Square(amplitude=amplitude, duration=5000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=5000), acq_port)
 
-            seq.trigger(ports)
-            sequences.append(seq)
+        seq.trigger(ports)
+        
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        data = DataDict(
-            amplitude=dict(unit=""),
-            s11=dict(axes=["amplitude"]),
-        )
-        data.validate()
-
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq in enumerate(tqdm(sequences)):
-                raw_data = tdm.run(
-                    seq, averaging_waveform=True, averaging_shot=False, as_complex=True)
-                writer.add_data(
-                    amplitude=amplitude_list[i],
-                    s11=raw_data['readout'],
-                )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
 
     # override
     def analyze(self, dataset, calibration_note, savefig=True, savepath="./fig"):
 
-        vacuum = dataset["s11"]["values"][0]
-        signal = dataset["s11"]["values"][1]
+        vacuum = dataset.data["readout_acquire"]["values"][0]
+        signal = dataset.data["readout_acquire"]["values"][1]
         noise_rms = (np.std(vacuum) + np.std(signal))/2
         signal_amplitude = np.abs(np.mean(signal) - np.mean(vacuum))
         sn_ratio = np.log10(signal_amplitude / noise_rms) * 10
@@ -121,7 +101,8 @@ class CheckReadoutPower(object):
             readout_amplitude_sn_0db = self.default_readout_amplitude * \
                 10**(attenuation/10.)
 
-        plot = PlotHelper(title=self.data_path)
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plot = PlotHelper(title=self.data_label)
         plot.plot_complex(data=vacuum, label="Vacuum")
         plot.plot_complex(data=signal, label="Signal")
         plot.label("I", "Q")
@@ -130,7 +111,7 @@ class CheckReadoutPower(object):
 
         if savefig:
             os.makedirs(savepath, exist_ok=True)
-            plt.savefig(f"{savepath}/{self.data_path}.png",
+            plt.savefig(f"{savepath}/{self.data_label}.png",
                         bbox_inches='tight')
         plt.show()
 

@@ -8,7 +8,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -77,6 +77,7 @@ class OptimizeReadoutPowerAndWindow(object):
         tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_repetition_margin(self.repetition_margin)
         tdm.set_shots(self.num_shot)
+        tdm.set_acquisition_mode(averaging_waveform=False, averaging_shot=False)
 
         readout_freq = note.cavity_readout_frequency
 
@@ -91,60 +92,35 @@ class OptimizeReadoutPowerAndWindow(object):
 
         pi_pulse_power = note.pi_pulse_power
 
-        seq_list = []
-        for qubit in [0, 1]:
-            seq_list_in = []
-            for amp in amp_range:
-                seq = Sequence(ports)
-                seq.add(Gaussian(amplitude=pi_pulse_power*qubit, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
-                        qubit_port, copy=False)
-                seq.add(Delay(10), qubit_port)
-                seq.trigger(ports)
-                seq.add(ResetPhase(phase=0), readout_port, copy=False)
-                seq.add(Square(amplitude=amp, duration=2000),
-                        readout_port, copy=False)
-                seq.add(Acquire(duration=2000), acq_port)
+        amp_list = [0, pi_pulse_power]
+        
+        qubit_amplitude = Variable("qubit_amplitude", amp_list, "V")
+        readout_amplitude = Variable("readout_amplitude", amp_list, "V")
+        variables = Variables([qubit_amplitude, readout_amplitude])
 
-                seq.trigger(ports)
-                seq_list_in.append(seq)
-            seq_list.append(seq_list_in)
+        seq = Sequence(ports)
+        seq.add(Gaussian(amplitude=qubit_amplitude, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
+                qubit_port, copy=False)
+        seq.add(Delay(10), qubit_port)
+        seq.trigger(ports)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
+        seq.add(Square(amplitude=readout_amplitude, duration=2000),
+                readout_port, copy=False)
+        seq.add(Acquire(duration=2000), acq_port)
 
-        data = DataDict(
-            qubit_amplitude=dict(unit=""),
-            readout_amplitude=dict(unit=""),
-            s11=dict(axes=["qubit_amplitude", "readout_amplitude"]),
-        )
-        data.validate()
+        seq.trigger(ports)
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, seq_list_in in enumerate(seq_list):
-                for j, seq in enumerate(tqdm(seq_list_in)):
-                    tdm.load_sequence(seq, cycles=self.num_shot)
-                    raw_data = tdm.run(seq, averaging_shot=False,
-                                       averaging_waveform=False, as_complex=True)
-                    writer.add_data(
-                        qubit_amplitude=i,
-                        readout_amplitude=amp_range[j],
-                        s11=raw_data['readout'],
-                    )
+        tdm.sequence = seq
+        tdm.variables = variables
 
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=True, exp_file=__file__)
 
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-
-        print(f"Experiment data saved in {self.data_path_all}")
         return dataset
 
-    def analyze(self, dataset, note, savefig=False, savepath="./fig"):
+    def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        power_list = dataset['readout_amplitude']['values'][:self.num_point]
-        response = dataset['s11']['values'].reshape(
+        power_list = dataset.data['readout_amplitude']['values'][:self.num_point]
+        response = dataset.data['readout_acquire']['values'].reshape(
             2, self.num_point, self.num_shot, 1000)
 
         cm_list = []
@@ -206,8 +182,10 @@ class OptimizeReadoutPowerAndWindow(object):
         readout_power_opt = power_list[chosen_index]
         window_opt = window_list[chosen_index]
 
+        self.data_label = dataset.path.split("/")[-1][27:]
+
         plt.figure(figsize=(8, 6))
-        plt.title(f"{self.data_path}")
+        plt.title(f"{self.data_label}")
         plt.plot(power_list, fid, marker='.')
         plt.axvline(readout_power_opt, ls='--', color='black')
         plt.fill_between([
@@ -217,7 +195,7 @@ class OptimizeReadoutPowerAndWindow(object):
         plt.ylabel('Readout fidelity')
 
         if savefig:
-            plt.savefig(f"{savepath}/{self.data_path}.png")
+            plt.savefig(f"{savepath}/{self.data_label}1.png")
         plt.show()
 
         x = gf.x
@@ -230,7 +208,7 @@ class OptimizeReadoutPowerAndWindow(object):
         e_data_weighted = data_list[chosen_index][1]
 
         fig, ax = plt.subplots(1, 3, figsize=(15, 5))
-        fig.suptitle(f"{self.data_path}")
+        fig.suptitle(f"{self.data_label}")
 
         ax[0].scatter(g_data_weighted.real, g_data_weighted.imag,
                       color='blue', label='Ground', marker=".")
@@ -269,6 +247,9 @@ class OptimizeReadoutPowerAndWindow(object):
         ax[2].set_ylabel("Prepared")
 
         fig.tight_layout()
+        
+        if savefig:
+            plt.savefig(f"{savepath}/{self.data_label}2.png")
         plt.show()
 
         experiment_note = AttributeDict()
