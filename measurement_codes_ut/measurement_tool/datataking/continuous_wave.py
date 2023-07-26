@@ -134,7 +134,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
 
         exp_name = f"{num_files:05}-{dataset_name}"
 
-        with DDH5Writer(data, data_path, name=exp_name) as writer:
+        with DDH5Writer(data, save_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
 
             for cur in (tqdm(sweep['Current']) if sweep_flag['Current'] else [current_source.current()]):
@@ -163,10 +163,11 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
          
 
         print(f"Experiment id. {num_files} completed.")
-        dataset = Dataset(self.session, save_path).load(num_files).data
 
-        return dataset
-    
+        dataset = Dataset(self.session)
+        dataset.load(num_files, save_path)
+
+        return dataset    
 
 
     def run_drive_sweep(self):

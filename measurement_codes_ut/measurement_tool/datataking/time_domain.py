@@ -234,7 +234,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         dataset = Dataset(self.session)
         dataset.load(num_files, save_path)
-        data = dataset.data
 
         return dataset
 

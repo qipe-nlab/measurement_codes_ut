@@ -86,12 +86,13 @@ class InstrumentManagerBase(object):
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
         elif "E50" in model:
-            vna = E5071C("vna", vna_address)
-            vna.trigger_output_polarity("negative")
-            vna.trigger_output_position("after")
-            # vna.aux1.trigger_mode("point")
-            # vna.trigger_input_type("level")
-            vna.trigger_input_polarity("positive")
+            raise ValueError("ENA-type device is not supported yet.")
+            # vna = E5071C("vna", vna_address)
+            # vna.trigger_output_polarity("negative")
+            # vna.trigger_output_position("after")
+            # # vna.aux1.trigger_mode("point")
+            # # vna.trigger_input_type("level")
+            # vna.trigger_input_polarity("positive")
 
         
         vna.electrical_delay(0)  # s

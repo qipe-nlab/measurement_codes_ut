@@ -10,6 +10,7 @@ class PortManager(object):
 
     def __init__(self, name: str, lo, if_freq: int, sideband: str):
         self.port = Port(name, if_freq/1e9, max_amp=1.5)
+        self.port_name = name
         self.frequency = 8e9
         self.status = False
         if sideband == 'lower':
@@ -39,3 +40,17 @@ class PortManager(object):
                 self.lo.off()
         else:
             self.lo.output(self.status)
+
+    def __repr__(self) -> str:
+        """Return string representation of Port
+
+        Returns:
+            str: string representation
+        """
+        repr_str = ""
+        repr_str += "Port name = {}\n".format(self.port_name)
+        repr_str += "Port frequency (GHz) = \"{}\"\n".format(self.frequency*1e-9)
+        repr_str += "Port IF frequency (MHz) = {}\n".format(self.port.if_freq*1e3)
+        
+
+        return repr_str
