@@ -1,2 +1,3 @@
 from .time_domain import TimeDomainInstrumentManager
+from .continuous_wave import ContinuousWaveInstrumentManager
 

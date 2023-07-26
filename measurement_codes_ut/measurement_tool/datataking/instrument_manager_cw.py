@@ -9,7 +9,6 @@ from qcodes_drivers.N51x1 import N51x1
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
-from qcodes_drivers.N51xx import N51xx
 from qcodes_drivers.E4407B import E4407B
 from qcodes_drivers.N5222A import N5222A
 from qcodes_drivers.M9804A import M9804A
@@ -86,7 +85,7 @@ class InstrumentManagerBase(object):
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
         elif "E50" in model:
-            raise ValueError("ENA-type device is not supported yet.")
+            raise ValueError("ENA-type device is not supported now.")
             # vna = E5071C("vna", vna_address)
             # vna.trigger_output_polarity("negative")
             # vna.trigger_output_position("after")
@@ -178,45 +177,60 @@ class InstrumentManagerBase(object):
             "device type", "device name", "device address", "port")
         s += "-" * (20 + 20 + 40  + 15) + "\n"
         
-        for _ in range(len(self.vna_info['model'])):
-            device_type = "VNA"
-            device_name = self.vna_info['model'][_]
-            address = self.vna_info['address'][_]
-            dep_port = self.vna_info['port'][_]
+        try:
+            for _ in range(len(self.vna_info['model'])):
+                device_type = "VNA"
+                device_name = self.vna_info['model'][_]
+                address = self.vna_info['address'][_]
+                dep_port = self.vna_info['port'][_]
 
-        s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
+                s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
 
-        for _ in range(len(self.lo_info['model'])):
-            device_type = "LO"
-            device_name = self.lo_info['model'][_]
-            address = self.lo_info['address'][_]
-            dep_port = self.lo_info['port'][_]
+        except:
+            pass
 
-            s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
+        try:
+            for _ in range(len(self.lo_info['model'])):
+                device_type = "LO"
+                device_name = self.lo_info['model'][_]
+                address = self.lo_info['address'][_]
+                dep_port = self.lo_info['port'][_]
 
-        for _ in range(len(self.current_info['model'])):
-            device_type = "Current source"
-            device_name = self.current_info['model'][_]
-            address = self.current_info['address'][_]
-            dep_port = self.current_info['port'][_]
+                s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
 
-            s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
+        except:
+            pass
+
+        try:
+        
+            for _ in range(len(self.current_info['model'])):
+                device_type = "Current source"
+                device_name = self.current_info['model'][_]
+                address = self.current_info['address'][_]
+                dep_port = self.current_info['port'][_]
+
+                s += f"{device_type:20} {device_name:20} {address:40} {dep_port:15}\n"
+
+        except:
+            pass
 
         s += "\n\n*** Current source status ***\n"
         s += "{:20} {:20}\n".format(
             "port name", "current (mA)")
         s += "-" * (20 + 20) + "\n"
-        for key, value in self.current_source.items():
-            name = key
-            cur = value.current()*1e3
 
-            s += f"{name:<20} {cur:<20.6f}\n"
+        try:
+            for key, value in self.current_source.items():
+                name = key
+                cur = value.current()*1e3
+
+                s += f"{name:<20} {cur:<20.6f}\n"
+        except:
+            pass
 
         return s
 
     def close_all(self):
-        self.hvi_trigger.close()
-        print(f"Connection to HVI trigger closed.")
         for name, lo in self.lo.items():
             try:
                 lo.close()
