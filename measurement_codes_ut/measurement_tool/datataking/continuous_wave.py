@@ -72,14 +72,14 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
                 else:
                     port.update_power()
 
-            if port.type == 'Current Source':
+            if port.type == 'Current source':
                 if isinstance(port.current, np.ndarray) or isinstance(port.current, list):
                     sweep['Current'] = np.array(port.current)
                 else:
                     port.update_current()
 
         sweep_flag = {key:True if isinstance(sweep[key], np.ndarray) else False for key in sweep}
-        
+        # print(sweep_flag)
         vna = self.vna
         vna.s_parameter("S21")
         try:
@@ -128,6 +128,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             drive_flag = True
 
         var_dict = {}
+        var_dict["VNA_frequency"] = dict(unit="Hz")
         for key in sweep:
             if isinstance(sweep[key], np.ndarray) and key in ["VNA_power", "LO_power", "Current"]:
                 if "power" in key:
@@ -141,6 +142,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         data.validate()
 
         save_path = self.save_path + dataset_subpath + "/"
+        os.makedirs(save_path, exist_ok=True)
         files = os.listdir(save_path)
         file_date_all = [f + "/" for f in files]
         num_files = 0
@@ -158,12 +160,12 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
                     current_source.ramp_current(cur, step=1e-8, delay=0)
                 except:
                     pass
-                for lo_power in (tqdm(sweep['LO_power']) if sweep_flag['LO_Power'] else [lo.power() if lo is not None else 0]):
+                for lo_power in (tqdm(sweep['LO_power']) if sweep_flag['LO_power'] else [lo.power() if lo is not None else 0]):
                     try:
                         lo.power(lo_power)
                     except:
                         pass
-                    for vna_power in (tqdm(sweep['VNA_power']) if sweep_flag['VNA_Power'] else [vna.power()]):
+                    for vna_power in (tqdm(sweep['VNA_power']) if sweep_flag['VNA_power'] else [vna.power()]):
                         vna.power(vna_power)
 
                         if drive_flag:
@@ -174,12 +176,15 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
                         write_dict = {}
                         for key in sweep:
                             if sweep_flag[key]:
+                                if key == 'LO_freq':
+                                    write_dict[key] = sweep["LO_freq"]
                                 if key == 'LO_power':
                                     write_dict[key] = lo_power
                                 if key == 'VNA_power':
                                     write_dict[key] = vna_power
                                 if key == 'Current':
                                     write_dict[key] = cur
+                        write_dict["VNA_frequency"] = vna.frequencies()
                         write_dict["S21"] = vna.trace()
                         writer.add_data(**write_dict)
          
