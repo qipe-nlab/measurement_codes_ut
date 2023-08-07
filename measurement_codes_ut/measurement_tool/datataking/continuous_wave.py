@@ -82,16 +82,21 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         
         vna = self.vna
         vna.s_parameter("S21")
-        lo = self.lo
-        lo.output(False)
-        current_source = self.current_source
+        try:
+            lo = self.lo
+            try:
+                lo.output(False)
+            except:
+                lo.off()
+        except:
+            pass
+        try:
+            current_source = self.current_source
+            current_source.off()
+        except:
+            pass
 
         vna.output(False)
-        try:
-            lo.output(False)
-        except:
-            lo.off()
-        current_source.output(False)
         
         drive_flag = False
 
@@ -147,10 +152,17 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         with DDH5Writer(data, save_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
 
-            for cur in (tqdm(sweep['Current']) if sweep_flag['Current'] else [current_source.current()]):
-                current_source.ramp_current(cur, step=1e-8, delay=0)
-                for lo_power in (tqdm(sweep['LO_power']) if sweep_flag['LO_Power'] else [lo.power()]):
-                    lo.power(lo_power)
+            for cur in (tqdm(sweep['Current']) if sweep_flag['Current'] else [current_source.current() if current_source is not None else 0]):
+                try:
+                    current_source.on()
+                    current_source.ramp_current(cur, step=1e-8, delay=0)
+                except:
+                    pass
+                for lo_power in (tqdm(sweep['LO_power']) if sweep_flag['LO_Power'] else [lo.power() if lo is not None else 0]):
+                    try:
+                        lo.power(lo_power)
+                    except:
+                        pass
                     for vna_power in (tqdm(sweep['VNA_power']) if sweep_flag['VNA_Power'] else [vna.power()]):
                         vna.power(vna_power)
 
