@@ -119,7 +119,7 @@ class InstrumentManagerBase(object):
         if "E82" in model:
             lo = E82x7(f"lo_{self.lo_id}", lo_address)
             lo.trigger_input_slope("negative")
-            lo.source_settled_polarity("low")
+            # lo.source_settled_polarity("low")
             lo.output(False)
         elif "N51" in model:
             lo = N51x1(f"lo_{self.lo_id}", lo_address)
