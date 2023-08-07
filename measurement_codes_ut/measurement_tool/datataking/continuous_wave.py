@@ -83,8 +83,18 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         vna = self.vna
         vna.s_parameter("S21")
         lo = self.lo
+        lo.output(False)
         current_source = self.current_source
+
+        vna.output(False)
+        try:
+            lo.output(False)
+        except:
+            lo.off()
+        current_source.output(False)
+        
         drive_flag = False
+
         if isinstance(sweep["VNA_freq"], np.ndarray):
             vna.sweep_type("linear frequency")
             vna.start(sweep['VNA_freq'][0])  # Hz
@@ -174,15 +184,21 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         vna = self.vna
         vna.output(True)
         drive_source = self.lo
-        drive_source.output(True)
+        try:
+            drive_source.output(True)
+        except:
+            drive_source.on()
         drive_source.start_sweep()
         vna.sweep_mode("single")
         try:
             while not (vna.done() and drive_source.sweep_done()):
-                time.sleep(0.1)
+                time.sleep(0.01)
         finally:
             vna.output(False)
-            drive_source.output(False)
+            try:
+                drive_source.output(False)
+            except:
+                drive_source.off()
     
     def prepare_experiment(self, writer, exp_file):
         writer.add_tag(self.tags)
