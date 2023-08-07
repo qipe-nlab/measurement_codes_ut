@@ -130,12 +130,12 @@ class InstrumentManagerBase(object):
             lo.off()
             print("Drive source other than E82x7 is not supported. May occur unexpected things.")
 
-            lo.power(lo_power)
-            lo.frequency(10e9)
-            self.lo = lo
-            self.lo_address[self.lo_id] = lo_address
-            self.station.add_component(lo)
-            self.lo_id += 1
+        lo.power(lo_power)
+        lo.frequency(10e9)
+        self.lo = lo
+        self.lo_address[self.lo_id] = lo_address
+        self.station.add_component(lo)
+        self.lo_id += 1
 
         self.port[port_name] = PortManager(self.lo, "LO")
 
