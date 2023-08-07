@@ -52,8 +52,8 @@ class InstrumentManagerBase(object):
         self.lo_id = 0
 
         self.tags = ["CW", session.cooling_down_id, session.package_name]
-        if save_path[-1] != "/" or save_path[-2:] != "\\":
-            save_path += "\\"
+        if save_path[-1] != "/" and save_path[-2:] != "\\":
+            save_path += "/"
         self.save_path = save_path
 
     def add_readout_line(self,

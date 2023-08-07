@@ -66,7 +66,7 @@ class InstrumentManagerBase(object):
         self.averaging_waveform = False
 
         self.tags = ["TD", session.cooling_down_id, session.package_name]
-        if save_path[-1] != "/" or save_path[-2:] != "\\":
+        if save_path[-1] != "/" and save_path[-2:] != "\\":
             save_path += "/"
         self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}/"
 
