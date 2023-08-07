@@ -161,7 +161,7 @@ class InstrumentManagerBase(object):
             # self.station.add_component(current_source)
 
             
-        self.port[port_name] = PortManager(self.current_source[port_name], "Current source")
+        self.port[port_name] = PortManager(self.current_source, "Current source")
 
     def add_spectrum_analyzer(self, name="spectrum_analyzer", address='GPIB0::16::INSTR'):
         spectrum_analyzer = E4407B(name, address)
