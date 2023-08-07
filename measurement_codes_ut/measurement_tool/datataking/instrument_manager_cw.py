@@ -129,7 +129,9 @@ class InstrumentManagerBase(object):
             lo = RohdeSchwarz_SGS100A(f"lo_{self.lo_id}", lo_address)
             lo.off()
             print("Drive source other than E82x7 is not supported. May occur unexpected things.")
-
+        else:
+            raise ValueError(f"Model {model} is not supported.")
+        
         lo.power(lo_power)
         lo.frequency(10e9)
         self.lo = lo
