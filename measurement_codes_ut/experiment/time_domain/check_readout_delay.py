@@ -74,7 +74,7 @@ class CheckReadoutDelay(object):
         seq.trigger(ports)
 
         tdm.sequence = seq
-        tdm.varibales = None
+        tdm.variables = None
 
         dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset

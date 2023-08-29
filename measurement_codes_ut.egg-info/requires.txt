@@ -1,0 +1,3 @@
+plottr@ git+https://github.com/qipe-nlab/plottr.git@search-datadict
+qcodes_drivers@ git+https://github.com/qipe-nlab/qcodes_drivers.git
+sequence_parser@ git+https://github.com/qipe-nlab/sequence_parser.git

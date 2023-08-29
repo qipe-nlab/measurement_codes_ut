@@ -194,5 +194,5 @@ wrapt==1.14.1
 xarray==2022.12.0
 xhistogram==0.3.2
 zipp==3.11.0
-measurement_codes_ut @ git+https://github.com/s-watanabe13/measurement_codes_ut.git 
+# measurement_codes_ut @ git+https://github.com/s-watanabe13/measurement_codes_ut.git 
 
