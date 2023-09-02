@@ -95,15 +95,17 @@ class CheckT2Ramsey(object):
         half_pi_pulse_power = note.pi_pulse_power
         half_pi_pulse_length = note.pi_pulse_length * 0.5
 
-        time_step = self.num_sample
-        time_range = np.linspace(
-            self.min_duration/2, self.max_duration/2, time_step, dtype=int) * 2
-        
+        interval = 2  # ns (Digitizer sampling rate. Default 2ns)
+        time_range = interval * np.linspace(
+            (self.min_duration + interval - 1) // interval,
+            self.max_duration // interval,
+            num=self.num_sample,
+            dtype=int
+        )
+
         duration = Variable("duration", time_range, "ns")
         variables = Variables([duration])
         seq = Sequence(ports)
-        if dur % 2 != 0:
-            seq.add(Delay(1), qubit_port)
         seq.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
                 qubit_port, copy=False)
         seq.add(Delay(duration), qubit_port)
