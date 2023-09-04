@@ -122,7 +122,7 @@ class CheckXYRamsey(object):
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        tdata = dataset.data['delay']['values'][:self.len_data]
+        tdata = dataset.data['duration']['values'][:self.len_data]
         response = dataset.data['readout_acquire']['values'].reshape(
             2, self.len_data, 2)  # phase, delay, IQ
 
