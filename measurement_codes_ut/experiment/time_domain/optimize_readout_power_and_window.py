@@ -87,15 +87,12 @@ class OptimizeReadoutPowerAndWindow(object):
 
         tdm.port['qubit'].frequency = qubit_freq
 
-        amp_range = np.linspace(
-            self.min_amplitude, self.max_amplitude, self.num_point)
-
-        pi_pulse_power = note.pi_pulse_power
-
-        amp_list = [0, pi_pulse_power]
+        readout_amp_range = np.linspace(
+            self.min_amplitude, self.max_amplitude, self.num_point, endpoint=True)
+        qubit_amp_range = [0, note.pi_pulse_power]
         
-        qubit_amplitude = Variable("qubit_amplitude", amp_list, "V")
-        readout_amplitude = Variable("readout_amplitude", amp_list, "V")
+        qubit_amplitude = Variable("qubit_amplitude", qubit_amp_range, "V")
+        readout_amplitude = Variable("readout_amplitude", readout_amp_range, "V")
         variables = Variables([qubit_amplitude, readout_amplitude])
 
         seq = Sequence(ports)

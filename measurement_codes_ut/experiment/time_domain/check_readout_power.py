@@ -80,7 +80,7 @@ class CheckReadoutPower(object):
         tdm.sequence = seq
         tdm.variables = variables
 
-        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=True, exp_file=__file__)
         return dataset
 
     # override

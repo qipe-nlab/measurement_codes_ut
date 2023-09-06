@@ -81,8 +81,8 @@ class CheckRabiOscillation(object):
 
         tdm.port['qubit'].frequency = qubit_freq
 
-        dur_range = 2 * sorted(set(np.linspace(self.min_duration/2, self.max_duration/2,
-                                40, dtype=int)))
+        interval = 2  # ns (Digitizer sampling rate. Default 2ns)
+        dur_range = interval * np.linspace((self.min_duration + interval - 1) // interval, self.max_duration // interval, num=40, dtype=int)
 
         duration = Variable("duration", dur_range, "ns")
         variables = Variables([duration])
