@@ -81,12 +81,13 @@ class OptimizeHalfPiDRAG(object):
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 
         half_pi_pulse_power = note.half_pi_pulse_power
+        self.half_pi_pulse_power = half_pi_pulse_power
         half_pi_pulse_length = note.pi_pulse_length * 0.5
 
-        drag_range = self.drag_range
+        drag_range = 1j*half_pi_pulse_power*self.drag_range
         phase_list = [np.pi/2, -np.pi/2]
 
-        drag = Variable("drag", self.drag_range, "V")
+        drag = Variable("drag", drag_range, "V")
         phase = Variable("phase", phase_list, "V")
         variables = Variables([phase, drag])
 
@@ -95,7 +96,7 @@ class OptimizeHalfPiDRAG(object):
         with rx90.align(qubit_port, 'left'):
             rx90.add(Gaussian(amplitude=half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
                         qubit_port, copy=False)
-            rx90.add(Deriviative(Gaussian(amplitude=1j*half_pi_pulse_power*drag, fwhm=half_pi_pulse_length /
+            rx90.add(Deriviative(Gaussian(amplitude=drag, fwhm=half_pi_pulse_length /
                                             3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
 
         seq.call(rx90)
@@ -128,7 +129,7 @@ class OptimizeHalfPiDRAG(object):
 
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        drag_range = dataset.data['drag']['values'][:len(self.drag_range)]
+        drag_range = dataset.data['drag']['values'][:len(self.drag_range)] /(1j*self.half_pi_pulse_power)
         response = dataset.data['readout_acquire']['values'].reshape(2, len(self.drag_range), 2)
         pm_label = ["+", "-"]
 
