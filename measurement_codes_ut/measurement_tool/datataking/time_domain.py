@@ -432,8 +432,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         # self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
-            for name, cur in self.current_source.items():
-                cur.output('on')
+            # for name, cur in self.current_source.items():
+            #     cur.output('on')
             for name, lo in self.lo.items():
                 try:
                     lo.output(True)
@@ -495,8 +495,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 lo.output(False)
             except:
                 lo.on()
-        for name, cur in self.current_source.items():
-            cur.output('off')
+        # for name, cur in self.current_source.items():
+        #     cur.output('off')
 
     def demodulate(self, data_all, averaging_waveform=True, as_complex=True):
         data_demod = {}

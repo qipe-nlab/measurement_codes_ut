@@ -92,7 +92,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             pass
         try:
             current_source = self.current_source
-            current_source.off()
+        #     current_source.off()
         except:
             pass
 
@@ -156,7 +156,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
 
             for cur in (tqdm(sweep['Current']) if sweep_flag['Current'] else [current_source.current() if current_source is not None else 0]):
                 try:
-                    current_source.on()
+                    # current_source.on()
                     current_source.ramp_current(cur, step=1e-8, delay=0)
                 except:
                     pass

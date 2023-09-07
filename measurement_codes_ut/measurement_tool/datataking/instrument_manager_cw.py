@@ -158,7 +158,7 @@ class InstrumentManagerBase(object):
         self.current_info['port'].append(port_name)
         current_source = GS200(
             port_name+"_current_source", current_source_address)
-        current_source.ramp_current(0e-6, step=1e-7, delay=0)
+        # current_source.ramp_current(0e-6, step=1e-7, delay=0)
         self.current_source = current_source
             # self.station.add_component(current_source)
 
