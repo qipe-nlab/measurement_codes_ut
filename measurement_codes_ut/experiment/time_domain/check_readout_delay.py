@@ -84,7 +84,8 @@ class CheckReadoutDelay(object):
         time = np.arange(1000)*2
         signal = dataset.data["readout_acquire"]["values"]
         ma_length = int(1/self.r_if)
-        convolve_length = int(max(time)/100)
+        convolve_length = int(max(time)/20)
+        # print(convolve_length)
 
         self.data_label = dataset.path.split("/")[-1][27:]
 
@@ -99,6 +100,7 @@ class CheckReadoutDelay(object):
         abs_grad_smoothed = np.abs(np.gradient(smoothed))
         delay_time_index = np.argmax(abs_grad_smoothed)
         delay_time = time[delay_time_index + convolve_cut]
+        # print(delay_time)
         cavity_readout_trigger_delay = delay_time
 
         signal_ma_i = np.convolve(
