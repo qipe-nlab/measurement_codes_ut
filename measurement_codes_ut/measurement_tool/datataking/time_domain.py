@@ -195,8 +195,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         save_path = self.save_path + dataset_subpath + "/"
         os.makedirs(save_path, exist_ok=True)
         files = os.listdir(save_path)
-        date = files[-1] + '/'
-        num_files = len(os.listdir(save_path+date))
+        file_date_all = [f + "/" for f in files]
+        num_files = 0
+        for date in file_date_all:
+            num_files += len(os.listdir(save_path+date))
 
         exp_name = f"{num_files:05}-{dataset_name}"
 
