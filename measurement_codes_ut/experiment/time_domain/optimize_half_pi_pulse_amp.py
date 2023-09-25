@@ -31,6 +31,7 @@ class OptimizeHalfPiAmp(object):
         "pi_pulse_length",
         "half_pi_pulse_power",
         "half_pi_pulse_drag",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "half_pi_pulse_power",
@@ -107,9 +108,9 @@ class OptimizeHalfPiAmp(object):
         seq.trigger(ports)
 
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         seq.trigger(ports)
         # seq.draw()

@@ -38,6 +38,7 @@ class CheckT2Echo(object):
         "cavity_readout_window_coefficient",
         "rabi_t1",
         "t1",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "t2_echo",
@@ -112,9 +113,9 @@ class CheckT2Echo(object):
                 qubit_port, copy=False)
         seq.trigger(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         seq.trigger(ports)
         tdm.sequence = seq

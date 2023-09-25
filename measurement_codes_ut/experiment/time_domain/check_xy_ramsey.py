@@ -35,6 +35,7 @@ class CheckXYRamsey(object):
         "pi_pulse_power",
         "cavity_readout_amplitude",
         "cavity_readout_window_coefficient",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "qubit_dressed_frequency",
@@ -108,9 +109,9 @@ class CheckXYRamsey(object):
                 qubit_port, copy=False)
         seq.trigger(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=2000),
+        seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         seq.trigger(ports)
 

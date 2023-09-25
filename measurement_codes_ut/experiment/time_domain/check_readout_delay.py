@@ -21,7 +21,8 @@ class CheckReadoutDelay(object):
     experiment_name = "CheckReadoutDelay"
     input_parameters = [
         "cavity_readout_sequence_amplitude_expected_sn",
-        "cavity_dressed_frequency_cw"
+        "cavity_dressed_frequency_cw",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "cavity_readout_trigger_delay",
@@ -67,9 +68,9 @@ class CheckReadoutDelay(object):
         seq = Sequence(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.trigger(ports)
-        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
+        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
         # seq.draw()
         seq.trigger(ports)
 

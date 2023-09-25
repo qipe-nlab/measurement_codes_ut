@@ -37,6 +37,7 @@ class OptimizeReadoutPowerAndWindow(object):
         "rabi_frequency",
         "pi_pulse_length",
         "pi_pulse_power",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "cavity_readout_amplitude",
@@ -101,9 +102,9 @@ class OptimizeReadoutPowerAndWindow(object):
         seq.add(Delay(10), qubit_port)
         seq.trigger(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.add(Square(amplitude=readout_amplitude, duration=2000),
+        seq.add(Square(amplitude=readout_amplitude, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         seq.trigger(ports)
 

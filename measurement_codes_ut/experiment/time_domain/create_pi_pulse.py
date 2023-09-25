@@ -31,6 +31,7 @@ class CreatePiPulse(object):
         "qubit_control_amplitude",
         "rabi_frequency",
         "pi_pulse_length",
+        "readout_pulse_length"
     ]
     output_parameters = [
         "pi_pulse_power",
@@ -93,9 +94,9 @@ class CreatePiPulse(object):
         seq.add(Delay(10), qubit_port)
         seq.trigger(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=2000),
+        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         seq.trigger(ports)
         tdm.sequence = seq
