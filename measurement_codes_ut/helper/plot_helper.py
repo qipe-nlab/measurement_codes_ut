@@ -28,7 +28,7 @@ class PlotHelper(object):
         plt.rcParams['axes.linewidth']      = 1.0
         plt.rcParams['xtick.direction']     = 'in'
         plt.rcParams['ytick.direction']     = 'in'
-        # plt.rcParams['font.family']         = 'arial'
+        plt.rcParams['font.family']         = 'Arial'
         # plt.rcParams["mathtext.fontset"]    = 'stixsans'
 
         self.rows = rows
