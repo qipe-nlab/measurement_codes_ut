@@ -16,12 +16,21 @@ Note this will also install plottr, qcodes_drivers, and sequence-parser as requi
 
 ## Usage
 ### Import
+Note you have to append these paths to the system path.
 ```python
-from measurement_codes_ut.measurement_tool.session import SessionManager as Session
+import sys
+sys.path.append("your-library-path/measurement_codes_ut")
+sys.path.append("your-library-path/measurement_codes_ut/measurement_codes_ut")
+```
+
+```python
+from measurement_codes_ut.measurement_tool import Session
 from measurement_codes_ut.measurement_tool.datataking.time_domain import TimeDomainInstrumentManager as TDM
 from measurement_codes_ut.measurement_tool import CalibrationNote
 from sequence_parser import Sequence, Variable, Variables
 from sequence_parser.instruction import *
+from measurement_codes_ut.helper import PlotHelper
+from measurement_codes_ut.measurement_tool.wrapper import Dataset
 ```
 
 ### Create a Session object to designate the user name, cooling down, and sample name.
@@ -37,17 +46,7 @@ session = Session(
 tdm = TDM(session, trigger_address="PXI0::1::BACKPLANE", save_path="your-save-directory")
 
 wiring = "\n".join([
-    "readout",
-    "E8257D(lo1) - 1500mm - LO2",
-    "M3202A_slot2_ch1 - 500mm - 10dB - IFin2",
-    "RFout2 - 1000mm - 20dB - F-19480 - In1D",
-    "Out2A - Miteq - 1500mm - RFin1",
-    "IFout1 - 500mm - DCblock - M3102A_slot9_ch1",
-
-    "drive_line",
-    "N5173B - 2000mm - LO#4",
-    "M3202A_slot2_ch2 - 500mm - 10dB - IFin4",
-    "RFout#4 - 1500mm - 10dB - In1C"
+    "your wiring information"
 ])
 
 tdm.set_wiring_note(wiring)
@@ -125,15 +124,25 @@ dataset = tdm.take_data(dataset_name="test", dataset_subpath="test", as_complex=
 ```
 
 ### Plot
+You can use plot-helper.
 ```python
 time = dataset.data['duration']['values']
 cplx = dataset.data['readout_acquire']['values']
+data_label = str(dataset.number) + "-" + dataset.name
+plot = PlotHelper(title=f"{data_label}", columns=1)
 
-plt.figure()
-plt.plot(time, cplx.real, label='I')
-plt.plot(time, cplx.imag, label='Q')
-plt.label("Time (ns)", "Signal")
-plt.legend()
+plot.plot(time, cplx.real, label='I')
+plot.plot(time, cplx.imag, label='Q')
+plot.label("Time (ns)", "Response")
+plt.tight_layout()
 plt.show()
+```
 
+### Dataset loading
+Your can load your previous data as Dataset.
+
+```python
+dataset = Dataset(session)
+save_path = f'your-save-directory'
+dataset.load(idx, save_path)
 ```
