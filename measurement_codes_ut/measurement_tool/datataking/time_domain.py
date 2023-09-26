@@ -323,8 +323,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         return variables
 
-
-        
         
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
@@ -333,6 +331,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         rng = np.random.default_rng()
         sequence.compile()
         self.seq_len = len(list(self.port.values())[0].port.waveform)
+        self.measurement_window = {}
         for awg in self.awg.values():
             awg.stop_all()
             awg.flush_waveform()
@@ -378,14 +377,15 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
                 dig_ch.cycles(cycles)
                 acq_port = self.acquire_port[key+"_acquire"]
-                if len(acq_port.measurement_windows) == 0:
+                self.measurement_window[key] = acq_port.measurement_windows
+                if len(self.measurement_window[key]) == 0:
                     acquire_start = 0
                 else:
                     acquire_start = int(acq_port.measurement_windows[0][0])
                     acquire_end = int(acq_port.measurement_windows[-1][1])
                     assert acquire_start % dig_ch.sampling_interval() == 0
                     assert acquire_end % dig_ch.sampling_interval() == 0
-                acquire_len = (acquire_end - acquire_start) // (20*dig_ch.sampling_interval()) * 20
+                acquire_len = int((acquire_end - acquire_start) // 20 * 20 /dig_ch.sampling_interval())
                 dig_ch.points_per_cycle(acquire_len)
                 dig_ch.delay(acquire_start //
                              dig_ch.sampling_interval())
@@ -503,25 +503,51 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
     def demodulate(self, data_all, averaging_waveform=True, as_complex=True):
         data_demod = {}
         for key, data in data_all.items():
-            t = np.arange(data.shape[-1]) * \
-                self.digitizer_ch[key].sampling_interval() * 1e-9
-            if averaging_waveform:
-                if self.port[key].window is None:
-                    data_demod[key] = (
-                        data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t)).mean(axis=-1)
+            if len(self.measurement_window[key]) == 1:
+                t = np.arange(data.shape[-1]) * \
+                    self.digitizer_ch[key].sampling_interval() * 1e-9
+                if averaging_waveform:
+                    if self.port[key].window is None:
+                        data_demod[key] = (
+                            data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t)).mean(axis=-1)
+                    else:
+                        d = data * np.exp(2j * np.pi *
+                                        self.port[key].port.if_freq*1e9 * t)
+                        data_demod[key] = np.dot(d, self.port[key].window)
+
                 else:
-                    d = data * np.exp(2j * np.pi *
-                                      self.port[key].port.if_freq*1e9 * t)
-                    data_demod[key] = np.dot(d, self.port[key].window)
-                if as_complex == False:
-                    data_demod[key] = np.stack(
-                        (data_demod[key].real, data_demod[key].imag), axis=-1)
+                    data_demod[key] = (
+                        data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t))
+                    
             else:
-                data_demod[key] = (
-                    data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t))
-                if as_complex == False:
-                    data_demod[key] = np.stack(
-                        (data_demod[key].real, data_demod[key].imag), axis=-1)
+                data_demod[key] = []
+                acquire_start = int(self.measurement_window[key][0][0])
+                for window in self.measurement_window[key]:
+                    start = (int(window[0]) - acquire_start) // self.digitizer_ch[key].sampling_interval()
+                    end = (int(window[1]) - acquire_start) // self.digitizer_ch[key].sampling_interval()
+                    data_each = data[...,start:end]
+                    t = np.arange(data_each.shape[-1]) * \
+                                self.digitizer_ch[key].sampling_interval() * 1e-9
+                    if averaging_waveform:
+                        demod_window = self.port[key].window
+                        if demod_window is None:
+                            data_demod[key].append(
+                                data_each * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t)).mean(axis=-1)
+                        else:
+                            d_each = data_each * np.exp(2j * np.pi *
+                                            self.port[key].port.if_freq*1e9 * t)
+                            if end-start > d_each.shape[-1]:
+                                demod_window = demod_window[:d_each.shape[-1]]
+
+                            data_demod[key].append(np.dot(d_each, demod_window))
+                    else:
+                        data_demod[key].append(data_each* np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t))
+
+                data_demod[key] = np.array(data_demod[key])
+            if as_complex == False:
+                data_demod[key] = np.stack(
+                    (data_demod[key].real, data_demod[key].imag), axis=-1)
+                    
         return data_demod
 
     def set_acquisition_mode(self, averaging_shot, averaging_waveform):
