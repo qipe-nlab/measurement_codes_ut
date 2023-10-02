@@ -27,6 +27,7 @@ class FindDispersiveShift(object):
     input_parameters = [
         "cavity_readout_sequence_amplitude_expected_sn",
         "cavity_readout_trigger_delay",
+        "cavity_readout_skew",
         "cavity_readout_electrical_delay",
         "cavity_dressed_frequency",
         "qubit_dressed_frequency",
@@ -101,8 +102,9 @@ class FindDispersiveShift(object):
         seq = Sequence(ports)
         seq.add(Gaussian(amplitude=amplitude, fwhm=note.pi_pulse_length/3, duration=note.pi_pulse_length, zero_end=True),
                 qubit_port, copy=False)
-        seq.add(Delay(10), qubit_port)
         seq.trigger(ports)
+        seq.add(Delay(note.cavity_readout_skew), readout_port)
+        seq.add(Delay(note.cavity_readout_skew), acq_port)    
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)

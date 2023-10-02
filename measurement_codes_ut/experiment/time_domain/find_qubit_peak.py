@@ -27,6 +27,7 @@ class FindQubitPeak(object):
         "cavity_readout_trigger_delay",
         "cavity_dressed_frequency",
         "qubit_frequency_cw",
+        "cavity_readout_skew",
         "readout_pulse_length"
     ]
     output_parameters = [
@@ -82,8 +83,10 @@ class FindQubitPeak(object):
         seq.add(Square(amplitude=self.default_qubit_pump_amplitude, duration=self.drive_length),
                 qubit_port)
         # seq.add(Delay(self.drive_length), readout_port)
-        seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.trigger(ports)
+        seq.add(Delay(note.cavity_readout_skew), readout_port)
+        seq.add(Delay(note.cavity_readout_skew), acq_port)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)
         seq.add(Acquire(duration=note.readout_pulse_length), acq_port)

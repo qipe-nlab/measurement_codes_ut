@@ -25,6 +25,7 @@ class FindCavityPeak(object):
         "cavity_readout_sequence_amplitude_expected_sn",
         "cavity_readout_electrical_delay",
         "cavity_readout_trigger_delay",
+        "cavity_readout_skew",
         "readout_pulse_length"
     ]
     output_parameters = [
@@ -73,8 +74,10 @@ class FindCavityPeak(object):
         tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
 
         seq = Sequence(ports)
-        seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.trigger(ports)
+        seq.add(Delay(note.cavity_readout_skew), readout_port)
+        seq.add(Delay(note.cavity_readout_skew), acq_port)
+        seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)
         seq.add(Acquire(duration=note.readout_pulse_length), acq_port)

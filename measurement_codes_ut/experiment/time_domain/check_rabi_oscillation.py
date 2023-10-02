@@ -28,6 +28,7 @@ class CheckRabiOscillation(object):
         "cavity_dressed_frequency",
         "qubit_dressed_frequency",
         "qubit_full_linewidth",
+        "cavity_readout_skew",
         "qubit_control_amplitude",
         "readout_pulse_length"
     ]
@@ -92,8 +93,9 @@ class CheckRabiOscillation(object):
 
         seq.add(FlatTop(Gaussian(amplitude=note.qubit_control_amplitude, fwhm=10, duration=20), top_duration=duration),
                 qubit_port, copy=False)
-        seq.add(Delay(20), qubit_port)
         seq.trigger(ports)
+        seq.add(Delay(note.cavity_readout_skew), readout_port)
+        seq.add(Delay(note.cavity_readout_skew), acq_port)    
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
                 readout_port, copy=False)

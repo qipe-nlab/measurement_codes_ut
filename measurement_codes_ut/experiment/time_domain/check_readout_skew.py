@@ -16,22 +16,22 @@ from plottr.data.datadict_storage import datadict_from_hdf5
 
 logger = getLogger(__name__)
 
-
-class CheckReadoutDelay(object):
-    experiment_name = "CheckReadoutDelay"
+class CheckReadoutSkewAll(object):
+    experiment_name = "CheckReadoutSkewAll"
     input_parameters = [
-        "cavity_readout_sequence_amplitude_expected_sn",
-        "cavity_dressed_frequency_cw",
+        "cavity_readout_trigger_delay",
         "readout_pulse_length"
     ]
     output_parameters = [
-        "cavity_readout_trigger_delay",
+        "cavity_readout_skew",
     ]
 
-    def __init__(self, num_shot=1000, repetition_margin=50e3,):
+    def __init__(self, num_shot=10000, repetition_margin=50e3,readout_delay = 1000, test_frequency = 10e9):
         self.dataset = None
         self.num_shot = num_shot
         self.repetition_margin = repetition_margin
+        self.readout_delay = readout_delay
+        self.test_frequency = test_frequency
 
     def execute(self, tdm, calibration_notes,
                 update_experiment=True, update_analyze=True):
@@ -49,28 +49,31 @@ class CheckReadoutDelay(object):
         note = calibaration_note.get_calibration_parameters(
             self.__class__.experiment_name, self.__class__.input_parameters)
 
-        readout_freq = note.cavity_dressed_frequency_cw
 
         readout_port = tdm.port['readout'].port
         self.r_if = readout_port.if_freq
         acq_port = tdm.acquire_port['readout_acquire']
         qubit_port = tdm.port['qubit'].port
 
-        tdm.port['readout'].frequency = readout_freq - 100e6
+        tdm.port['readout'].frequency = self.test_frequency
+        tdm.port['qubit'].frequency = self.test_frequency
 
         ports = [readout_port, qubit_port, acq_port]
 
         tdm.set_repetition_margin(self.repetition_margin)
-        tdm.set_acquisition_delay(0)
+        tdm.set_acquisition_delay(note.cavity_readout_trigger_delay)
         tdm.set_shots(self.num_shot)
         tdm.set_acquisition_mode(averaging_waveform=False, averaging_shot=True)
 
         seq = Sequence(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.trigger(ports)
-        seq.add(Square(amplitude=1.0, duration=2000),
-                readout_port, copy=False)
-        seq.add(Acquire(duration=2000), acq_port)
+        seq.add(Delay(self.readout_delay), qubit_port)
+        seq.add(Square(amplitude=1.5, duration=5000),
+                qubit_port, copy=False)
+        
+        seq.add(Delay(5000), readout_port)
+        seq.add(Acquire(duration=5000), acq_port)
         # seq.draw()
         seq.trigger(ports)
 
@@ -82,7 +85,7 @@ class CheckReadoutDelay(object):
 
     # override
     def analyze(self, dataset, calibration_note, savefig=True, savepath="./fig"):
-        time = np.arange(1000)*2
+        time = np.arange(2500)*2 - self.readout_delay
         signal = dataset.data["readout_acquire"]["values"]
         ma_length = int(1/self.r_if)
         convolve_length = int(max(time)/20)
@@ -102,7 +105,7 @@ class CheckReadoutDelay(object):
         delay_time_index = np.argmax(abs_grad_smoothed)
         delay_time = time[delay_time_index + convolve_cut]
         # print(delay_time)
-        cavity_readout_trigger_delay = delay_time
+        cavity_readout_skew = delay_time
 
         signal_ma_i = np.convolve(
             signal[:, 0], np.ones(ma_length)/ma_length, "valid")
@@ -134,7 +137,7 @@ class CheckReadoutDelay(object):
         plt.show()
 
         experiment_note = AttributeDict()
-        experiment_note.cavity_readout_trigger_delay = cavity_readout_trigger_delay*1.0
+        experiment_note.cavity_readout_skew = cavity_readout_skew*1.0
         calibration_note.add_experiment_note(
             self.__class__.experiment_name, experiment_note, self.__class__.output_parameters,)
 

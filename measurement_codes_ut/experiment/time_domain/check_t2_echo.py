@@ -26,6 +26,7 @@ class CheckT2Echo(object):
     experiment_name = "CheckT2Echo"
     input_parameters = [
         "cavity_readout_trigger_delay",
+        "cavity_readout_skew",
         "cavity_dressed_frequency",
         "cavity_readout_frequency",
         "qubit_dressed_frequency",
@@ -112,6 +113,8 @@ class CheckT2Echo(object):
         seq.add(Gaussian(amplitude=-half_pi_pulse_power, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
                 qubit_port, copy=False)
         seq.trigger(ports)
+        seq.add(Delay(note.cavity_readout_skew), readout_port)
+        seq.add(Delay(note.cavity_readout_skew), acq_port)    
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_amplitude, duration=note.readout_pulse_length),
                 readout_port, copy=False)
