@@ -69,14 +69,14 @@ class InstrumentManagerBase(object):
         self.vna_info['address'].append(vna_address)
         self.vna_info['port'].append(port_name)
         vna_dummy.close()
-        # print(model)
+        print(model)
         if "N52" in model:
             vna = N5222A("vna", vna_address)
-            vna.aux1.output_polarity("negative")
-            vna.aux1.output_position("after")
-            vna.aux1.trigger_mode("point")
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
+            vna.aux1.output_polarity("negative")
+            vna.aux1.output_position("after")
+            vna.aux1.aux_trigger_mode("point")
         elif "M98" in model:
             vna = M9804A("vna", vna_address)
             vna.aux_trig_1_output_polarity("negative")

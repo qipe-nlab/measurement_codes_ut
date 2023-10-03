@@ -23,7 +23,12 @@ class PortManager(object):
     def update_frequency(self):
         try:
             time.sleep(0.01)
-            self.device.frequency(self.frequency)
+            if self.type=='VNA':
+                self.device.start(self.frequency)
+                self.device.stop(self.frequency)
+                self.device.points(len(sweep['LO_freq']))
+            else:
+                self.device.frequency(self.frequency)
         except:
             pass
 

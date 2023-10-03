@@ -496,7 +496,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             except:
                 lo.on()
         for name, cur in self.current_source.items():
-            cur.output('off')
+            cur.ramp_current(cur, step=1e-8, delay=0)
 
     def demodulate(self, data_all, averaging_waveform=True, as_complex=True):
         data_demod = {}
