@@ -5,16 +5,15 @@ import time
 
 
 class PortManager(object):
-
-    def __init__(self, device, dev_type):
-        # self.port = Port(name, if_freq/1e9, max_amp=1.5)
-        self.frequency = 8e9
-        self.power = None
-        self.current = 0.0
-        self.status = False
         
-        self.device = device
-        self.type = dev_type
+    def __init__(self, attrs):
+        for k, v in attrs.items():
+            setattr(self, k, v)
+
+            
+    def __getattr__(self, name):
+        return name
+        
 
     def set_frequency(self, frequency):
         self.frequency = frequency

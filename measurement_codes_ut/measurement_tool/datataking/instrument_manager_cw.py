@@ -99,7 +99,7 @@ class InstrumentManagerBase(object):
         self.station.add_component(vna)
         self.vna = vna
 
-        self.port[port_name] = PortManager(self.vna, "VNA")
+        self.port[port_name] = PortManager({"device":vna, "power":vna.power(), "frequency":vna.frequencies()[0], "output":vna.output()})
 
     def add_drive_line(self,
                        port_name: str,
@@ -139,7 +139,7 @@ class InstrumentManagerBase(object):
         self.station.add_component(lo)
         self.lo_id += 1
 
-        self.port[port_name] = PortManager(lo, "LO")
+        self.port[port_name] = PortManager({"device":lo, "power":lo_power, "frequency":lo.frequency(), "output":lo.output()})
 
     def add_current_source_bias_line(self, 
                                      port_name: str,
@@ -161,9 +161,10 @@ class InstrumentManagerBase(object):
         # current_source.ramp_current(0e-6, step=1e-7, delay=0)
         self.current_source[port_name] = current_source
             # self.station.add_component(current_source)
-
+        current = current_source.current()
+        output = current_source.output()
             
-        self.port[port_name] = PortManager(current_source, "Current source")
+        self.port[port_name] = PortManager({"device":current_source, "current":current, "output":output})
 
     def add_spectrum_analyzer(self, name="spectrum_analyzer", address='GPIB0::16::INSTR'):
         spectrum_analyzer = E4407B(name, address)
