@@ -36,13 +36,13 @@ class InstrumentManagerBase(object):
         self.session = session
         self.station = qc.Station()
 
-        self.lo = {}
+        self.lo = None
         self.lo_info = {"model": [], "address": [], "port": []}
 
         self.vna = None
         self.vna_info = {"model": [], "address": [], "port": []}
         
-        self.current_source = {}
+        self.current_source = None
         self.current_info = {"model": [],
                              "address": [], "port": []}
         
@@ -134,7 +134,7 @@ class InstrumentManagerBase(object):
         
         lo.power(lo_power)
         lo.frequency(10e9)
-        self.lo[port_name] = lo
+        self.lo = lo
         # self.lo_address[self.lo_id] = lo_address
         self.station.add_component(lo)
         self.lo_id += 1
@@ -159,7 +159,7 @@ class InstrumentManagerBase(object):
         current_source = GS200(
             port_name+"_current_source", current_source_address)
         # current_source.ramp_current(0e-6, step=1e-7, delay=0)
-        self.current_source[port_name] = current_source
+        self.current_source = current_source
             # self.station.add_component(current_source)
 
             
