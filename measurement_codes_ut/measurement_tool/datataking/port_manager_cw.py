@@ -34,6 +34,19 @@ class PortManager(object):
     def update_status(self):
         self.device.output(self.status)
 
+    def enable_output(self):
+        try:
+            self.device.output(True)
+        except:
+            self.device.on()
+
+    def disable_output(self):
+        try:
+            self.device.output(False)
+        except:
+            self.device.off()
+
+
     def set_power(self, power):
         self.power = power
         self.update_power()

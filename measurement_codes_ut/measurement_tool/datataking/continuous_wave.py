@@ -84,10 +84,10 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         vna.s_parameter("S21")
         try:
             lo = self.lo
-            try:
-                lo.output(False)
-            except:
-                lo.off()
+        #     try:
+        #         lo.output(False)
+        #     except:
+        #         lo.off()
         except:
             pass
         try:
@@ -105,9 +105,13 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             vna.start(sweep['VNA_freq'][0])  # Hz
             vna.stop(sweep['VNA_freq'][-1])  # Hz
             vna.points(len(sweep['VNA_freq']))
+            vna.trigger_source("manual")
 
         elif isinstance(sweep["LO_freq"], np.ndarray):
-            vna_freq = vna.frequency()
+            # vna_freq = vna.frequency()
+            for name, port in self.port.items():
+                if port.type == 'VNA':
+                    vna_freq = port.frequency
             vna.sweep_type("linear frequency")
             vna.start(vna_freq)
             vna.stop(vna_freq)
@@ -124,13 +128,15 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             
             lo.frequency_mode("list")
             lo.point_trigger_source("external")
+            lo.frequency_start(sweep["LO_freq"][0])
+            lo.frequency_stop(sweep["LO_freq"][-1])
             lo.sweep_points(len(sweep["LO_freq"]))
             drive_flag = True
 
         var_dict = {}
         var_dict["VNA_frequency"] = dict(unit="Hz")
         for key in sweep:
-            if isinstance(sweep[key], np.ndarray) and key in ["VNA_power", "LO_power", "Current"]:
+            if isinstance(sweep[key], np.ndarray) and key in ["VNA_power", "LO_freq", "LO_power", "Current"]:
                 if "power" in key:
                     var_dict[key] = dict(unit="dBm")
                 else:
@@ -177,7 +183,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
                         for key in sweep:
                             if sweep_flag[key]:
                                 if key == 'LO_freq':
-                                    write_dict[key] = sweep["LO_freq"]
+                                    write_dict[key] = lo.frequencies()
                                 if key == 'LO_power':
                                     write_dict[key] = lo_power
                                 if key == 'VNA_power':
@@ -209,7 +215,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         vna.sweep_mode("single")
         try:
             while not (vna.done() and drive_source.sweep_done()):
-                time.sleep(0.01)
+                time.sleep(0.1)
         finally:
             vna.output(False)
             try:

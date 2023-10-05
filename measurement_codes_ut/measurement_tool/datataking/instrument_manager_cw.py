@@ -36,13 +36,13 @@ class InstrumentManagerBase(object):
         self.session = session
         self.station = qc.Station()
 
-        self.lo = None
+        self.lo = {}
         self.lo_info = {"model": [], "address": [], "port": []}
 
         self.vna = None
         self.vna_info = {"model": [], "address": [], "port": []}
         
-        self.current_source = None
+        self.current_source = {}
         self.current_info = {"model": [],
                              "address": [], "port": []}
         
@@ -74,7 +74,7 @@ class InstrumentManagerBase(object):
             vna = N5222A("vna", vna_address)
             vna.aux1.output_polarity("negative")
             vna.aux1.output_position("after")
-            vna.aux1.trigger_mode("point")
+            vna.aux1.aux_trigger_mode("point")
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
         elif "M98" in model:
@@ -134,12 +134,12 @@ class InstrumentManagerBase(object):
         
         lo.power(lo_power)
         lo.frequency(10e9)
-        self.lo = lo
+        self.lo[port_name] = lo
         # self.lo_address[self.lo_id] = lo_address
         self.station.add_component(lo)
         self.lo_id += 1
 
-        self.port[port_name] = PortManager(self.lo, "LO")
+        self.port[port_name] = PortManager(lo, "LO")
 
     def add_current_source_bias_line(self, 
                                      port_name: str,
@@ -159,11 +159,11 @@ class InstrumentManagerBase(object):
         current_source = GS200(
             port_name+"_current_source", current_source_address)
         # current_source.ramp_current(0e-6, step=1e-7, delay=0)
-        self.current_source = current_source
+        self.current_source[port_name] = current_source
             # self.station.add_component(current_source)
 
             
-        self.port[port_name] = PortManager(self.current_source, "Current source")
+        self.port[port_name] = PortManager(current_source, "Current source")
 
     def add_spectrum_analyzer(self, name="spectrum_analyzer", address='GPIB0::16::INSTR'):
         spectrum_analyzer = E4407B(name, address)
