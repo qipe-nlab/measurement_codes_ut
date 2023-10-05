@@ -106,8 +106,8 @@ class InstrumentManagerBase(object):
                        lo_address: str,
                        lo_power: int,):
         
-        if self.lo is not None:
-            raise ValueError("More than 1 LO is allocated.")
+        # if len(self.lo) !=:
+        #     raise ValueError("More than 1 LO is allocated.")
         
         lo_dummy = E82x7(f"lo_{self.lo_id}", lo_address)
         model = lo_dummy.IDN()['model']
