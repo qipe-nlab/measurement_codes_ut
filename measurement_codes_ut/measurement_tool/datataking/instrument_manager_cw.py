@@ -151,8 +151,8 @@ class InstrumentManagerBase(object):
         """
 
         
-        if self.current_source is not None:
-            raise ValueError("More than 1 current source is allocated.")
+        # if self.current_source is not None:
+        #     raise ValueError("More than 1 current source is allocated.")
         self.current_info['model'].append("GS200")
         self.current_info['address'].append(current_source_address)
         self.current_info['port'].append(port_name)
