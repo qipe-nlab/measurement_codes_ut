@@ -66,7 +66,7 @@ class PlotHelper(object):
         self.current_index = row * self.columns + column
         if previous_index != self.current_index:
             plt.subplot(self.rows, self.columns, self.current_index + 1)
-            plt.grid()
+            # plt.grid()
 
     def label(self, xproperty, yproperty, title = None):
         """Add x and y label to plots.
