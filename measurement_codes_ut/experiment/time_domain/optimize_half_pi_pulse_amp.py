@@ -88,22 +88,22 @@ class OptimizeHalfPiAmp(object):
         phase_list = [0, np.pi]
 
         amplitude = Variable("amplitude", self.amp_range, "V")
+        drag_amplitude = Variable("drag_amplitude", 1j*self.amp_range*note.half_pi_pulse_drag, "V")
         phase = Variable("phase", phase_list, "V")
-        variables = Variables([phase, amplitude])
+        variables = Variables([phase, amplitude, drag_amplitude])
 
         seq = Sequence(ports)
         rx90 = Sequence(ports)
         with rx90.align(qubit_port, 'left'):
             rx90.add(Gaussian(amplitude=amplitude, fwhm=half_pi_pulse_length/3, duration=half_pi_pulse_length, zero_end=True),
                         qubit_port, copy=False)
-            rx90.add(Deriviative(Gaussian(amplitude=1j*amplitude*note.half_pi_pulse_drag, fwhm=half_pi_pulse_length /
+            rx90.add(Deriviative(Gaussian(amplitude=drag_amplitude, fwhm=half_pi_pulse_length /
                                             3, duration=half_pi_pulse_length, zero_end=True)), qubit_port, copy=False)
         for _ in range(4*self.rep):
             seq.call(rx90)
 
-        seq.add(VirtualZ(-phase), qubit_port)
-        seq.call(rx90)
         seq.add(VirtualZ(phase), qubit_port)
+        seq.call(rx90)
 
         seq.trigger(ports)
 
@@ -118,14 +118,14 @@ class OptimizeHalfPiAmp(object):
         tdm.sequence = seq
         tdm.variables = variables
 
-        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__, sweep_axis=[0,1,1])
 
         return dataset
 
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
         amp_range = self.amp_range
-        response = dataset['readout_acquire']['values'].reshape(2, len(self.amp_range), 2)
+        response = dataset.data['readout_acquire']['values'].reshape(2, len(self.amp_range), 2)
 
         pm_label = ["+", "-"]
         ge_label = ["0", "1"]

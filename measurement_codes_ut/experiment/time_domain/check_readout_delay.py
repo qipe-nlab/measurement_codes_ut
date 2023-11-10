@@ -85,7 +85,7 @@ class CheckReadoutDelay(object):
         time = np.arange(1000)*2
         signal = dataset.data["readout_acquire"]["values"]
         ma_length = int(1/self.r_if)
-        convolve_length = int(max(time)/20)
+        convolve_length = ma_length
         # print(convolve_length)
 
         self.data_label = dataset.path.split("/")[-1][27:]

@@ -86,7 +86,7 @@ class OptimizeHalfPiDRAG(object):
         half_pi_pulse_length = note.pi_pulse_length * 0.5
 
         drag_range = 1j*half_pi_pulse_power*self.drag_range
-        phase_list = [np.pi/2, -np.pi/2]
+        phase_list = [-np.pi/2, np.pi/2]
 
         drag = Variable("drag", drag_range, "V")
         phase = Variable("phase", phase_list, "V")
@@ -107,9 +107,8 @@ class OptimizeHalfPiDRAG(object):
             seq.call(rx90)
             seq.add(VirtualZ(np.pi), qubit_port)
 
-        seq.add(VirtualZ(-phase), qubit_port)
-        seq.call(rx90)
         seq.add(VirtualZ(phase), qubit_port)
+        seq.call(rx90)
 
         seq.trigger(ports)
 

@@ -126,7 +126,7 @@ class CheckT2Echo(object):
 
     def analyze(self, dataset, note, savefig=False, savepath="./fig"):
 
-        time = dataset.data['duration']['values']
+        time = dataset.data['duration']['values']*2
         response = dataset.data['readout_acquire']['values']
 
         def exp_decay(x, a, c, b):

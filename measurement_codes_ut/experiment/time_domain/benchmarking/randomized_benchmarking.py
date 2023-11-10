@@ -9,7 +9,7 @@ from sequence_parser.util.decompose import *
 from plottr.data.datadict_storage import DataDict, DDH5Writer
 from plottr.data.datadict_storage import datadict_from_hdf5
 from sklearn.decomposition import PCA
-from tqdm import tqdm
+from tqdm.notebook import tqdm
 import os
 
 
@@ -64,6 +64,7 @@ class RandomizedBenchmarking:
         Sequence.su2 = su2
 
     def execute(self, tdm, note, update_experiment=True, update_analyze=True):
+        self.tdm = tdm
         if update_experiment:
             self.dataset = self.take_data(tdm, note)
 
@@ -105,8 +106,8 @@ class RandomizedBenchmarking:
         meas.trigger(ports)
         meas.add(ResetPhase(phase=0), readout_port, copy=False)
         meas.add(Square(amplitude=note.cavity_readout_amplitude,
-                 duration=2000), readout_port)
-        meas.add(Acquire(duration=2000), acq_port)
+                 duration=note.readout_pulse_length), readout_port)
+        meas.add(Acquire(duration=note.readout_pulse_length), acq_port)
 
         rb_seq = []
         for (length, random) in self.sequence_list:
@@ -135,7 +136,6 @@ class RandomizedBenchmarking:
                     sequence_array.append(gate_array)
 
             ## apply experiment ##
-            rb_seq_in = []
             for gate_array in sequence_array:
                 seq = Sequence(ports)
                 for pos, gate in enumerate(gate_array):
@@ -148,49 +148,24 @@ class RandomizedBenchmarking:
                             seq.trigger(ports)
                 seq.trigger(ports)
                 seq.call(meas)
-                rb_seq_in.append(seq)
-            rb_seq.append(rb_seq_in)
+                rb_seq.append(seq)
 
         self.rb_seq = rb_seq
+        tdm.sequence = rb_seq
+
         print("done")
 
     def take_data(self, tdm, note):
         self.prepare(tdm, note)
-        data = DataDict(
-            circuit_length=dict(unit=""),
-            circuit_index=dict(unit=""),
-            s11=dict(axes=["circuit_length", "circuit_index"]),
-        )
-        data.validate()
+        tdm.variables = None
 
-        with DDH5Writer(data, tdm.save_path, name=self.__class__.experiment_name) as writer:
-            tdm.prepare_experiment(writer, __file__)
-            for i, rb_seq_in in enumerate(tqdm(self.rb_seq)):
-                for j, seq in enumerate((rb_seq_in)):
-                    raw_data = tdm.run(
-                        seq, as_complex=False)
-                    writer.add_data(
-                        circuit_length=self.length_list[i],
-                        circuit_index=j,
-                        s11=raw_data['readout'],
-                    )
-
-        files = os.listdir(tdm.save_path)
-        date = files[-1] + '/'
-        files = os.listdir(tdm.save_path+date)
-        self.data_path = files[-1]
-
-        self.data_path_all = tdm.save_path+date+self.data_path + '/'
-
-        dataset = datadict_from_hdf5(self.data_path_all+"data")
-
-        print(f"Experiment data saved in {self.data_path_all}")
+        dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
 
         return dataset
 
     def analyze(self, dataset):
         pca = PCA()
-        response = pca.fit_transform(dataset['s11']['values'])[:, 0]
+        response = pca.fit_transform(dataset.data['readout_acquire']['values'])[:, 0]
         response_mean = response.reshape(
             len(self.length_list), self.random_circuit_count).mean(axis=1)
         response_std = response.reshape(
@@ -220,7 +195,8 @@ class RandomizedBenchmarking:
         y_fit = exp_decay(length_fit, *popt)
 
         plt.figure(figsize=(8, 6))
-        plt.title(f'{self.data_path}')
+        self.data_label = dataset.path.split("/")[-1][27:]
+        plt.title(f"{self.data_label}")
         plt.errorbar(self.length_list, response_mean, yerr=response_std,
                      fmt='o', capsize=5, color='black', label='data')
         plt.plot(length_fit, y_fit, color='red',

@@ -81,6 +81,15 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 exp_file,
                 verbose)
             
+        elif isinstance(seq, list):
+            dataset = self.take_data_sequence(
+                dataset_name, 
+                dataset_subpath, 
+                as_complex, 
+                exp_file,
+                verbose)
+            
+            
         else:
 
             # Re-construct variablse.command_list        
@@ -236,6 +245,51 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         dataset = Dataset(self.session)
         dataset.load(num_files, save_path)
+
+        return dataset
+
+    def take_data_sequence(self, 
+                            dataset_name: str, 
+                            dataset_subpath: str = "TD", 
+                            as_complex: bool = True, 
+                            exp_file: str = None,
+                            verbose: bool = True):
+        seq = self.sequence[0]
+        var_dict = {'sequence_id':dict(unit='')}
+        for port in seq.port_list:
+            if "acquire" in port.name:
+                var_dict[port.name] = dict(axes=list(var_dict.keys()))
+
+        data = DataDict(**var_dict)
+        data.validate()
+
+        save_path = self.save_path + dataset_subpath + "/"
+        os.makedirs(save_path, exist_ok=True)
+        files = os.listdir(save_path)
+        file_date_all = [f + "/" for f in files]
+        num_files = 0
+        for date in file_date_all:
+            num_files += len(os.listdir(save_path+date))
+
+        exp_name = f"{num_files:05}-{dataset_name}"
+
+
+        with DDH5Writer(data, save_path, name=exp_name) as writer:
+            self.prepare_experiment(writer, exp_file)
+            for i, seq in enumerate(tqdm(self.sequence) if verbose else self.sequence):
+                raw_data = self.run(seq, as_complex=as_complex)
+                write_dict = {}
+                write_dict["sequence_id"] = i
+                for port in seq.port_list:
+                    if "acquire" in port.name:
+                        write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                writer.add_data(**write_dict)    
+
+        print(f"Experiment id. {num_files} completed.")
+
+        dataset = Dataset(self.session)
+        dataset.load(num_files, save_path)
+        data = dataset.data
 
         return dataset
 
