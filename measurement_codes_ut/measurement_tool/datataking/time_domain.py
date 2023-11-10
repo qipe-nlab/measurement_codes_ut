@@ -581,6 +581,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         if self.variables is None:
             self.sequence.draw()
         else:
-            update_command = self.variables.update_command_list[-1]
-            self.sequence.update_variables(update_command)
+            for update_command in self.variables.update_command_list:
+                self.sequence.update_variables(update_command)
             self.sequence.draw()
