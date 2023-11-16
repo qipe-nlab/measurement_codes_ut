@@ -82,7 +82,7 @@ class CheckReadoutDelay(object):
 
     # override
     def analyze(self, dataset, calibration_note, savefig=True, savepath="./fig"):
-        time = np.arange(1000)*2
+        time = np.arange(int(calibration_note.readout_pulse_length/2))*2
         signal = dataset.data["readout_acquire"]["values"]
         ma_length = int(1/self.r_if)
         convolve_length = ma_length
