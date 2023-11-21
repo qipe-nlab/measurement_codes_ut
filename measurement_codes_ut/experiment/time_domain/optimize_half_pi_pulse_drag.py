@@ -129,7 +129,7 @@ class OptimizeHalfPiDRAG(object):
 
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
 
-        drag_range = dataset.data['drag']['values'][:len(self.drag_range)] /(1j*self.half_pi_pulse_power)
+        drag_range = np.real(dataset.data['drag']['values'][:len(self.drag_range)] /(1j*self.half_pi_pulse_power))
         response = dataset.data['readout_acquire']['values'].reshape(2, len(self.drag_range), 2)
         pm_label = ["+", "-"]
 
