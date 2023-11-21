@@ -15,6 +15,7 @@ from plottr.data.datadict_storage import datadict_from_hdf5
 from measurement_codes_ut.fitting import ResonatorReflectionModel
 from measurement_codes_ut.fitting.qubit_spectral import QubitSpectral
 from measurement_codes_ut.fitting.rabi_oscillation import RabiOscillation
+from scipy.optimize import curve_fit
 
 
 logger = getLogger(__name__)
@@ -33,8 +34,8 @@ class CheckRabiOscillation(object):
     ]
     output_parameters = [
         "rabi_frequency",
-        "rabi_decay_rate",
-        "rabi_t1",
+        # "rabi_decay_rate",
+        # "rabi_t1",
     ]
 
     def __init__(self, num_shot=1000, repetition_margin=200e3, min_duration=10, max_duration=400):
@@ -120,29 +121,47 @@ class CheckRabiOscillation(object):
         projected = pca.fit_transform(response)
         component = projected[:, 0]
 
-        model = RabiOscillation()
-        model.fit(time, component)
+        # model = RabiOscillation()
+        # model.fit(time, component)
 
-        fitting_parameter_list = [
-            'amplitude',
-            'rabi_frequency',
-            'phase_offset',
-            'decay_rate',
-            'amplitude_offset',
-        ]
-        for index, item in enumerate(fitting_parameter_list):
-            name = item
-            value = model.param_list[index]
-            value_error = model.param_error_list[index]
-            setattr(self, name, value)
-            setattr(self, name+"_stderr", value_error)
+        # fitting_parameter_list = [
+        #     'amplitude',
+        #     'rabi_frequency',
+        #     'phase_offset',
+        #     'decay_rate',
+        #     'amplitude_offset',
+        # ]
+        # for index, item in enumerate(fitting_parameter_list):
+        #     name = item
+        #     value = model.param_list[index]
+        #     value_error = model.param_error_list[index]
+        #     setattr(self, name, value)
+        #     setattr(self, name+"_stderr", value_error)
 
-        rabi_t1 = (1./model.param_list[3])
-        rabi_t1_error = (model.param_error_list[3]/model.param_list[3]**2)
+        # rabi_t1 = (1./model.param_list[3])
+        # rabi_t1_error = (model.param_error_list[3]/model.param_list[3]**2)
+        N = len(time)
+        C_init = np.mean(component)
+        y_n = component - C_init
+        fft_data = np.fft.fft(y_n)
+        freq_idx = np.argmax(np.abs(fft_data[:int(N/2)]))
+        fft_peak = fft_data[freq_idx]
+        T = time[-1] - time[0]
+        del_freq = 1/T
 
+        B_init = np.angle(fft_peak)
+        f_init = del_freq*freq_idx
+        A_init = np.max(abs(y_n))
+
+        p_init = [A_init, f_init, B_init, C_init]
+
+        def Cosin(t, A, freq , phi, C):
+            return A * np.cos(t*2*np.pi * freq + phi) + C
+
+        popt, pcov = curve_fit(Cosin, time, component, p0=p_init, maxfev=100000)
         fit_slice = 1001
         time_fit = np.linspace(min(time), max(time), fit_slice)
-        component_fit = model.predict(time_fit)
+        component_fit = Cosin(time_fit, *popt)
 
         self.data_label = dataset.path.split("/")[-1][27:]
 
@@ -166,8 +185,8 @@ class CheckRabiOscillation(object):
         plt.show()
 
         experiment_note = AttributeDict()
-        experiment_note.rabi_t1 = rabi_t1
-        experiment_note.rabi_frequency = self.rabi_frequency
-        experiment_note.rabi_decay_rate = self.decay_rate
+        # experiment_note.rabi_t1 = rabi_t1
+        experiment_note.rabi_frequency = popt[1]
+        # experiment_note.rabi_decay_rate = self.decay_rate
         note.add_experiment_note(self.__class__.experiment_name,
                                  experiment_note, self.__class__.output_parameters)

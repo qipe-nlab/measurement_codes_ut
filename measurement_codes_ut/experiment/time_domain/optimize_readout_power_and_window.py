@@ -119,7 +119,7 @@ class OptimizeReadoutPowerAndWindow(object):
 
         power_list = dataset.data['readout_amplitude']['values'][:self.num_point]
         response = dataset.data['readout_acquire']['values'].reshape(
-            2, self.num_point, self.num_shot, 1000)
+            2, self.num_point, self.num_shot, int(note.readout_pulse_length/2))
 
         cm_list = []
         fitter_list = []
