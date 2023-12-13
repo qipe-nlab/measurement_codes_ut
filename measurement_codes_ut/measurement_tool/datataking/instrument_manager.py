@@ -1,4 +1,5 @@
 import numpy as np
+from typing import Optional, Union, List, Dict, Tuple
 from logging import getLogger
 
 import numpy as np
@@ -92,8 +93,8 @@ class InstrumentManagerBase(object):
                               lo_power: int,
                               awg_chasis: int,
                               awg_slot: int,
-                              awg_channel,
-                              IQ_corrector,
+                              awg_channel: Union[int, List[int]],
+                              IQ_corrector: Optional[Dict[str,str]],
                               if_freq: float,
                               sideband: str) -> None:
         """add misc control line
@@ -149,8 +150,10 @@ class InstrumentManagerBase(object):
             ref_dict = {1: awg.ch1, 2: awg.ch2, 3: awg.ch3, 4: awg.ch4}
             if isinstance(awg_channel, int):
                 awg_ch = ref_dict[awg_channel]
-            else:
+            elif isinstance(awg_channel, list):
                 awg_ch = ref_dict[awg_channel[0]], ref_dict[awg_channel[1]]
+            else:
+                raise ValueError("awg_channel must be int or list")
 
             self.awg_ch[port_name] = self.awg_id, awg_ch
             if IQ_corrector is None:
@@ -175,8 +178,10 @@ class InstrumentManagerBase(object):
             ref_dict = {1: awg.ch1, 2: awg.ch2, 3: awg.ch3, 4: awg.ch4}
             if isinstance(awg_channel, int):
                 awg_ch = ref_dict[awg_channel]
-            else:
+            elif isinstance(awg_channel, list):
                 awg_ch = ref_dict[awg_channel[0]], ref_dict[awg_channel[1]]
+            else:
+                raise ValueError("awg_channel must be int or list")
             self.awg_ch[port_name] = idx, awg_ch
             if IQ_corrector is None:
                 self.IQ_corrector[port_name] = None
@@ -204,8 +209,8 @@ class InstrumentManagerBase(object):
                          awg_channel,
                          dig_chasis: int,
                          dig_slot: int,
-                         dig_channel,
-                         IQ_corrector,
+                         dig_channel: Union[int, List[int]],
+                         IQ_corrector: Optional[Dict[str,str]],
                          if_freq: float = 125e6,
                          sideband: str = "lower") -> None:
         """add readout line
@@ -268,8 +273,8 @@ class InstrumentManagerBase(object):
                        lo_power: int,
                        awg_chasis: int,
                        awg_slot: int,
-                       awg_channel: int,
-                       IQ_corrector,
+                       awg_channel: Union[int, List[int]],
+                       IQ_corrector: Optional[Dict[str,str]],
                        if_freq: float = 150e6,
                        sideband: str = "lower") -> None:
         """add single-qubit control line
