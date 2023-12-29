@@ -10,6 +10,10 @@ from qcodes_drivers.HVI_Trigger import HVI_Trigger
 from qcodes_drivers.iq_corrector import IQCorrector
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
+try:
+    from qcodes_drivers.APMSYN22 import APMSYN22
+except:
+    pass
 from sequence_parser import Port, Sequence
 from sequence_parser.iq_port import IQPort
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
@@ -124,6 +128,10 @@ class InstrumentManagerBase(object):
             elif "SGS" in model:
                 lo = RohdeSchwarz_SGS100A(f"lo_{self.lo_id}", lo_address)
                 lo.off()
+            elif "AP" in model:
+                lo = APMSYN22(f"lo_{self.lo_id}", lo_address)
+                lo.output(False)
+
 
             lo.power(lo_power)
             lo.frequency(10e9 - if_freq)
