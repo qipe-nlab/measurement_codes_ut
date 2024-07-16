@@ -7,7 +7,12 @@ This package aims to complete everything within jupyter notebook without any set
 This package also includes python files to execute automated time-domain basic measurements, but not perfect.
 
 ## Installation
-Clone this repository to your preferred directory on the experimental PC.
+Clone this repository to your preferred directory on the experimental PC
+
+You also need to install 
+sequence_parser(https://github.com/qipe-nlab/sequence_parser.git),
+qcodes_drivers(https://github.com/qipe-nlab/qcodes_drivers.git), and 
+plottr(https://github.com/qipe-nlab/plottr/tree/search-datadict).
 
 ## Usage
 ### Import
