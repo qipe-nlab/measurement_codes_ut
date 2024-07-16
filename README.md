@@ -1,18 +1,13 @@
 # measurement_codes_ut
 
-This is a library supporting time-domain experiments using the fridges at Univ. of Tokyo.
+This is a library supporting time-domain experiments using the fridges at Hongo.
 
 This package aims to complete everything within jupyter notebook without any setup files like setup_td.py.
 
-Users are recommended to use CalibratonNote class to save/load calibration results instead of manually noting information on setup files.
-
-This package also includes python files to execute automated time-domain basic measurements.
+This package also includes python files to execute automated time-domain basic measurements, but not perfect.
 
 ## Installation
-```
-pip install measurement_codes_ut@git+https://github.com/qipe-nlab/measurement_codes_ut.git 
-```
-Note this will also install plottr, qcodes_drivers, and sequence-parser as required installation.
+Clone this repository to your preferred directory on the experimental PC.
 
 ## Usage
 ### Import
@@ -38,12 +33,13 @@ from measurement_codes_ut.measurement_tool.wrapper import Dataset
 session = Session(
     cooling_down_id='CDxxx', 
     experiment_username="YOUR NAME", 
-    sample_name="SAMPLE NAME")
+    sample_name="SAMPLE NAME",
+    save_path="YOUR PREFERRED PATH TO SAVE DATA")
 ```
 
 ### Save all the information of measurement instruments in TimeDomainInstrumentManager class. 
 ```python
-tdm = TDM(session, trigger_address="PXI0::1::BACKPLANE", save_path="your-save-directory")
+tdm = TDM(session, trigger_address="PXI0::1::BACKPLANE")
 
 wiring = "\n".join([
     "your wiring information"
@@ -51,10 +47,12 @@ wiring = "\n".join([
 
 tdm.set_wiring_note(wiring)
 
+dataset_subpath = ""
+
 tdm.add_readout_line(
     port_name="readout",
-    lo_address="TCPIP0::192.168.100.5::inst0::INSTR",
-    lo_power=24,
+    lo_address="TCPIP0::192.168.100.7::inst0::INSTR",
+    lo_power=17,
     awg_chasis=1,
     awg_slot=2,
     awg_channel=1,
@@ -62,20 +60,20 @@ tdm.add_readout_line(
     dig_slot=9,
     dig_channel=1,
     IQ_corrector=None,
-    if_freq=125e6,
+    if_freq=50e6,
     sideband='lower'
 )
 
 # For qubit control line
 tdm.add_qubit_line(
     port_name="qubit",
-    lo_address="TCPIP0::192.168.100.9::inst0::INSTR",
-    lo_power=18,
+    lo_address="TCPIP0::192.168.100.8::inst0::INSTR",
+    lo_power=7,
     awg_chasis=1,
     awg_slot=2,
     awg_channel=2,
     IQ_corrector=None,
-    if_freq=150e6,
+    if_freq=100e6,
     sideband='lower'
 )
 ```
@@ -119,9 +117,13 @@ seq.trigger(ports)
 tdm.sequence = seq
 tdm.variables = variables
 
-dataset = tdm.take_data(dataset_name="test", dataset_subpath="test", as_complex=True, exp_file="test.ipynb")
+tdm.show_sweep_plan()
+
+dataset = tdm.take_data(dataset_name="test", dataset_subpath=dataset_subpath, as_complex=True, exp_file="test.ipynb")
 
 ```
+
+For more advanced experiments, contact and ask your senior.
 
 ### Plot
 You can use plot-helper.
@@ -143,6 +145,7 @@ Your can load your previous data as Dataset.
 
 ```python
 dataset = Dataset(session)
-save_path = f'your-save-directory'
-dataset.load(idx, save_path)
+dataset.load(idx, dataset_subpath)
 ```
+
+
