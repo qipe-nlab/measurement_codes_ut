@@ -7,7 +7,7 @@ from sklearn.decomposition import PCA
 from tqdm import tqdm
 
 from measurement_codes_ut.measurement_tool.wrapper import AttributeDict
-from sequence_parser import Port, Sequence
+from sequence_parser import Port, Sequence, Variable, Variables
 from sequence_parser.instruction import *
 
 from measurement_codes_ut.helper.plot_helper import PlotHelper
@@ -77,39 +77,65 @@ class FindQubitPeak(object):
         qubit_freq = note.qubit_frequency_cw
 
         tdm.port['readout'].frequency = readout_freq
+        tdm.port['readout'].window = None
 
-        seq = Sequence(ports)
-        seq.add(Square(amplitude=self.default_qubit_pump_amplitude, duration=self.drive_length),
-                qubit_port)
-        # seq.add(Delay(self.drive_length), readout_port)
-        seq.add(ResetPhase(phase=0), readout_port, copy=False)
-        seq.trigger(ports)
-        seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
-                readout_port, copy=False)
-        seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
-        # seq.draw()
+        if tdm.port['qubit'].lo is None:
+            self.awg_direct = True
 
-        data = DataDict(
-            frequency=dict(unit="Hz"),
-            s11=dict(axes=["frequency"]),
-        )
-        data.validate()
+            qubit_port.if_freq = qubit_freq / 1e9
 
-        shift = np.linspace(-self.qubit_freq_range/2,
-                            self.qubit_freq_range/2, self.qubit_freq_step)
 
-        tdm.port['qubit'].frequency = qubit_freq + shift
+            shift = np.linspace(-self.qubit_freq_range/2,
+                                self.qubit_freq_range/2, self.qubit_freq_step) * 1e-9
 
-        tdm.sequence = seq
-        tdm.variables = None
+            detuning = Variable("detuning", shift, "Hz")
+            variables = Variables([detuning])
+
+            seq = Sequence(ports)
+            seq.add(SetDetuning(detuning), qubit_port)
+            seq.add(Square(amplitude=self.default_qubit_pump_amplitude, duration=self.drive_length),
+                    qubit_port)
+            # seq.add(Delay(self.drive_length), readout_port)
+            seq.add(ResetPhase(phase=0), readout_port, copy=False)
+            seq.trigger(ports)
+            seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
+                    readout_port, copy=False)
+            seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
+            # seq.draw()
+
+            tdm.sequence = seq
+            tdm.variables = variables
+
+        else:
+            self.awg_direct = False
+            seq = Sequence(ports)
+            seq.add(Square(amplitude=self.default_qubit_pump_amplitude, duration=self.drive_length),
+                    qubit_port)
+            # seq.add(Delay(self.drive_length), readout_port)
+            seq.add(ResetPhase(phase=0), readout_port, copy=False)
+            seq.trigger(ports)
+            seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
+                    readout_port, copy=False)
+            seq.add(Acquire(duration=note.readout_pulse_length), acq_port)
+            # seq.draw()
+
+            shift = np.linspace(-self.qubit_freq_range/2,
+                                self.qubit_freq_range/2, self.qubit_freq_step)
+
+            tdm.port['qubit'].frequency = qubit_freq + shift
+
+            tdm.sequence = seq
+            tdm.variables = None
 
         dataset = tdm.take_data(dataset_name=self.__class__.experiment_name, as_complex=False, exp_file=__file__)
         return dataset
     # override
 
     def analyze(self, dataset, note, savefig=True, savepath="./fig"):
-
-        freq = dataset.data["qubit_LO_frequency"]["values"]
+        if self.awg_direct:
+            freq = dataset.data["detuning"]["values"]*1e9 + note.qubit_frequency_cw 
+        else:
+            freq = dataset.data["qubit_LO_frequency"]["values"]
         signal = dataset.data["readout_acquire"]["values"]
 
         qubit_dressed_frequency = note.qubit_frequency_cw

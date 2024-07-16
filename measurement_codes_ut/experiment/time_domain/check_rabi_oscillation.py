@@ -34,11 +34,11 @@ class CheckRabiOscillation(object):
     ]
     output_parameters = [
         "rabi_frequency",
-        "rabi_decay_rate",
-        "rabi_t1",
+        "rabi_pulse_amplitude",
     ]
 
-    def __init__(self, num_shot=1000, repetition_margin=200e3, min_duration=10, max_duration=400):
+
+    def __init__(self, num_shot=1000, repetition_margin=200e3, pulse_amplitude = 1, min_duration=10, max_duration=400):
         self.dataset = None
         self.num_shot = num_shot
         # self.num_cycle = num_cycle
@@ -47,6 +47,7 @@ class CheckRabiOscillation(object):
         self.repetition_margin = repetition_margin
         self.min_duration = min_duration
         self.max_duration = max_duration
+        self.pulse_amplitude = pulse_amplitude
 
     def execute(self, tdm, calibration_notes,
                 update_experiment=True, update_analyze=True):
@@ -80,8 +81,12 @@ class CheckRabiOscillation(object):
         qubit_freq = note.qubit_dressed_frequency
 
         tdm.port['readout'].frequency = readout_freq
+        tdm.port['readout'].window = None
 
-        tdm.port['qubit'].frequency = qubit_freq
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = qubit_freq/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq
 
         interval = 2  # ns (Digitizer sampling rate. Default 2ns)
         dur_range = interval * np.linspace((self.min_duration + interval - 1) // interval, self.max_duration // interval, num=40, dtype=int)
@@ -91,9 +96,9 @@ class CheckRabiOscillation(object):
 
         seq = Sequence(ports)
 
-        seq.add(FlatTop(Gaussian(amplitude=note.qubit_control_amplitude, fwhm=10, duration=20), top_duration=duration),
+        seq.add(FlatTop(Gaussian(amplitude=self.pulse_amplitude, fwhm=10, duration=20), top_duration=duration),
                 qubit_port, copy=False)
-        seq.add(Delay(20), qubit_port)
+        # seq.add(Delay(20), qubit_port)
         seq.trigger(ports)
         seq.add(ResetPhase(phase=0), readout_port, copy=False)
         seq.add(Square(amplitude=note.cavity_readout_sequence_amplitude_expected_sn, duration=note.readout_pulse_length),
@@ -120,29 +125,32 @@ class CheckRabiOscillation(object):
         pca = PCA()
         projected = pca.fit_transform(response)
         component = projected[:, 0]
+        
+        N = len(time)
+        C_init = np.mean(component)
+        y_n = component - C_init
+        fft_data = np.fft.fft(y_n)
+        freq_idx = np.argmax(np.abs(fft_data[:int(N/2)]))
+        fft_peak = fft_data[freq_idx]
+        T = time[-1] - time[0]
+        del_freq = 1/T
 
-        model = RabiOscillation()
-        model.fit(time, component)
+        B_init = np.angle(fft_peak)
+        f_init = del_freq*freq_idx
+        A_init = np.max(abs(y_n))
+    
+        p_init = [A_init, f_init, B_init, C_init]
+    
+        def Cosin(t, A, freq , phi, C):
+            return A * np.cos(t*2*np.pi * freq + phi) + C
+        
+        popt, pcov = curve_fit(Cosin, time, component, p0=p_init, maxfev=100000)
+        self.rabi_frequency = popt[1]
+        
 
-        fitting_parameter_list = [
-            'amplitude',
-            'rabi_frequency',
-            'phase_offset',
-            'decay_rate',
-            'amplitude_offset',
-        ]
-        for index, item in enumerate(fitting_parameter_list):
-            name = item
-            value = model.param_list[index]
-            value_error = model.param_error_list[index]
-            setattr(self, name, value)
-            setattr(self, name+"_stderr", value_error)
-
-        rabi_t1 = (1./model.param_list[3])
-        rabi_t1_error = (model.param_error_list[3]/model.param_list[3]**2)
         fit_slice = 1001
         time_fit = np.linspace(min(time), max(time), fit_slice)
-        component_fit = model.predict(time_fit)
+        component_fit = Cosin(time_fit, *popt)
 
         self.data_label = dataset.path.split("/")[-1][27:]
 
@@ -165,9 +173,9 @@ class CheckRabiOscillation(object):
                         bbox_inches='tight')
         plt.show()
 
+
         experiment_note = AttributeDict()
-        experiment_note.rabi_t1 = rabi_t1
         experiment_note.rabi_frequency = self.rabi_frequency
-        experiment_note.rabi_decay_rate = self.decay_rate
+        experiment_note.rabi_pulse_amplitude = self.pulse_amplitude
         note.add_experiment_note(self.__class__.experiment_name,
                                  experiment_note, self.__class__.output_parameters)

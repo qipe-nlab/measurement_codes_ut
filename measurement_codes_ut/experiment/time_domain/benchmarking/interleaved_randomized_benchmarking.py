@@ -104,7 +104,10 @@ class InterleavedRandomizedBenchmarking:
 
         tdm.port['readout'].frequency = note.cavity_readout_frequency
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
-        tdm.port['qubit'].frequency = note.qubit_dressed_frequency
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = note.qubit_dressed_frequency/1e9
+        else:
+            tdm.port['qubit'].frequency = note.qubit_dressed_frequency
         tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
         tdm.set_shots(self.num_shot)
         tdm.set_repetition_margin(self.repetition_margin)
@@ -231,7 +234,7 @@ class InterleavedRandomizedBenchmarking:
             (2**self.number_of_qubit)
         colors = ['red', 'blue']
         labels = ['Reference', 'Interleaved']
-        plt.figure(figsize=(8, 6))
+        plt.figure()
         self.data_label = dataset_i.path.split("/")[-1][27:]
         plt.title(f"{self.data_label}")
         for i in range(2):

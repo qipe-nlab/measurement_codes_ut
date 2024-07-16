@@ -243,7 +243,7 @@ class CalibrationNote(object):
                     "type": "integer_value",
                 }
             else:
-                raise ValueError("invalid type")
+                raise ValueError(f"invalid type, {type(value)}")
         doc = mydic
         jsonname = f"{path}/{name}.json"
         with open(jsonname, "w") as fout:

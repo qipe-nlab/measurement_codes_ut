@@ -6,6 +6,7 @@ import itertools
 import copy
 import os
 import qcodes as qc
+import time
 from qcodes_drivers.E82x7 import E82x7
 from qcodes_drivers.N51x1 import N51x1
 from qcodes_drivers.HVI_Trigger import HVI_Trigger
@@ -50,7 +51,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                   sweep_axis: list = None, 
                   as_complex: bool = True, 
                   exp_file: str = None,
-                  verbose: bool = True):
+                  verbose: bool = True,
+                  demodulate: bool = True,
+                  lo_switch: bool = True):
         """take data
 
         Args:
@@ -79,7 +82,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 sweep_axis, 
                 as_complex, 
                 exp_file,
-                verbose)
+                verbose,
+                lo_switch)
             
         elif isinstance(seq, list):
             dataset = self.take_data_sequence(
@@ -87,7 +91,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 dataset_subpath, 
                 as_complex, 
                 exp_file,
-                verbose)
+                verbose,
+                lo_switch)
             
             
         else:
@@ -107,7 +112,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
             data = DataDict(**var_dict)
             data.validate()
-
             
             save_path = self.save_path + dataset_subpath + "/"
             os.makedirs(save_path, exist_ok=True)
@@ -122,28 +126,50 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
             with DDH5Writer(data, save_path, name=exp_name) as writer:
                 self.prepare_experiment(writer, exp_file)
-                if var:
-                    for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
-                        seq.update_variables(update_command)
-                        # seq.draw()
-                        raw_data = self.run(seq, as_complex=as_complex)
-                        write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                if lo_switch:
+                    if var:
+                        for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
+                            seq.update_variables(update_command)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
+                        write_dict = {}
                         for port in seq.port_list:
                             if "acquire" in port.name:
                                 write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                         writer.add_data(**write_dict)
                 else:
-                    raw_data = self.run(seq, as_complex=as_complex)
-                    write_dict = {}
-                    for port in seq.port_list:
-                        if "acquire" in port.name:
-                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
-                    writer.add_data(**write_dict)
+                    self.lo_output_switch(True)
+                    if var:
+                        for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
+                            seq.update_variables(update_command)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex, lo_switch=False, demodulate=demodulate)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+                    else:
+                        raw_data = self.run(seq, as_complex=as_complex, lo_switch=False, demodulate=demodulate)
+                        write_dict = {}
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+                    self.lo_output_switch(False)
+
                 
             print(f"Experiment id. {num_files} completed.")
 
             dataset = Dataset(self.session)
-            dataset.load(num_files, save_path)
+            dataset.load(num_files, save_path, log=False)
             data = dataset.data
 
         return dataset
@@ -154,7 +180,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                   sweep_axis: list = None, 
                   as_complex: bool = True, 
                   exp_file: str = None,
-                  verbose: bool = True):
+                  verbose: bool = True,
+                  demodulate: bool = True,
+                  lo_switch: bool = True):
         """take data
 
         Args:
@@ -214,37 +242,67 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         with DDH5Writer(data, save_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
-            if var_other:
-                for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
-                    seq.update_variables(update_command)
-                    
-                    for lo in (tqdm(lo_sweep_value, leave=False) if verbose else lo_sweep_value):
+            if lo_switch:
+                if var_other:
+                    for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
+                        seq.update_variables(update_command)
+                        
+                        for lo in (tqdm(lo_sweep_value, leave=False) if verbose else lo_sweep_value):
+                            self.port[lo_sweep_key].set_frequency(lo)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+
+                else:
+                    for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
                         self.port[lo_sweep_key].set_frequency(lo)
-                        # seq.draw()
-                        raw_data = self.run(seq, as_complex=as_complex)
-                        write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                        raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
+                        write_dict = {}
                         write_dict[lo_sweep_key+"_LO_frequency"] = lo
                         for port in seq.port_list:
                             if "acquire" in port.name:
                                 write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
                         writer.add_data(**write_dict)
-
             else:
-                for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
-                    self.port[lo_sweep_key].set_frequency(lo)
-                    raw_data = self.run(seq, as_complex=as_complex)
-                    write_dict = {}
-                    write_dict[lo_sweep_key+"_LO_frequency"] = lo
-                    for port in seq.port_list:
-                        if "acquire" in port.name:
-                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
-                    writer.add_data(**write_dict)
+                self.lo_output_switch(True)
+                if var_other:
+                    for update_command in (tqdm(variables.update_command_list) if verbose else variables.update_command_list):
+                        seq.update_variables(update_command)
+                        
+                        for lo in (tqdm(lo_sweep_value, leave=False) if verbose else lo_sweep_value):
+                            self.port[lo_sweep_key].set_frequency(lo)
+                            # seq.draw()
+                            raw_data = self.run(seq, as_complex=as_complex, lo_switch=False, demodulate=demodulate)
+                            write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
+                            write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                            for port in seq.port_list:
+                                if "acquire" in port.name:
+                                    write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                            writer.add_data(**write_dict)
+
+                else:
+                    for lo in (tqdm(lo_sweep_value) if verbose else lo_sweep_value):
+                        self.port[lo_sweep_key].set_frequency(lo)
+                        raw_data = self.run(seq, as_complex=as_complex, lo_switch=False, demodulate=demodulate)
+                        write_dict = {}
+                        write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                        for port in seq.port_list:
+                            if "acquire" in port.name:
+                                write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                        writer.add_data(**write_dict)
+                self.lo_output_switch(False)
+
 
                 
         print(f"Experiment id. {num_files} completed.")
 
         dataset = Dataset(self.session)
-        dataset.load(num_files, save_path)
+        dataset.load(num_files, save_path, log=False)
 
         return dataset
 
@@ -253,7 +311,9 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                             dataset_subpath: str = "TD", 
                             as_complex: bool = True, 
                             exp_file: str = None,
-                            verbose: bool = True):
+                            verbose: bool = True,
+                            demodulate: bool = True,
+                            lo_switch: bool = True):
         seq = self.sequence[0]
         var_dict = {'sequence_id':dict(unit='')}
         for port in seq.port_list:
@@ -273,22 +333,36 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         exp_name = f"{num_files:05}-{dataset_name}"
 
+        sequence_list = self.sequence
 
+        
         with DDH5Writer(data, save_path, name=exp_name) as writer:
             self.prepare_experiment(writer, exp_file)
-            for i, seq in enumerate(tqdm(self.sequence) if verbose else self.sequence):
-                raw_data = self.run(seq, as_complex=as_complex)
-                write_dict = {}
-                write_dict["sequence_id"] = i
-                for port in seq.port_list:
-                    if "acquire" in port.name:
-                        write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
-                writer.add_data(**write_dict)    
+            if lo_switch:
+                for i, seq in enumerate(tqdm(sequence_list) if verbose else sequence_list):
+                    # seq.draw()
+                    raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
+                    write_dict = {}
+                    write_dict["sequence_id"] = i
+                    for port in seq.port_list:
+                        if "acquire" in port.name:
+                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                    writer.add_data(**write_dict)    
+            else:
+                self.lo_output_switch(True)
+                for i, seq in enumerate(tqdm(sequence_list) if verbose else sequence_list):
+                    raw_data = self.run(seq, as_complex=as_complex, lo_switch=False, demodulate=demodulate)
+                    write_dict = {}
+                    write_dict["sequence_id"] = i
+                    for port in seq.port_list:
+                        if "acquire" in port.name:
+                            write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
+                    writer.add_data(**write_dict) 
+                self.lo_output_switch(False)
 
         print(f"Experiment id. {num_files} completed.")
-
         dataset = Dataset(self.session)
-        dataset.load(num_files, save_path)
+        dataset.load(num_files, save_path, log=False)
         data = dataset.data
 
         return dataset
@@ -381,17 +455,27 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
 
-    def load_sequence(self, sequence: Sequence, cycles: int, noise_variance=0):
+    def load_sequence(self, sequence: Sequence, cycles: int, add_delay=True):
         rng = np.random.default_rng()
         sequence.compile()
-        self.seq_len = len(list(self.port.values())[0].port.waveform)
+        self.seq_len = int(sequence.max_waveform_length)
+        # print(self.seq_len)
+        if add_delay:
+            if self.seq_len < 2040:
+                delay = 2040 - self.seq_len
+            else:
+                delay = 0
+        else:
+            delay = 0
+        # delay += self.is_in_range(self.seq_len + delay)
+        self.total_length = self.seq_len + delay
         self.measurement_window = {}
         for awg in self.awg.values():
             awg.stop_all()
             awg.flush_waveform()
 
         waveform_awg = {
-            key: np.zeros(self.seq_len, dtype=complex) for key in self.awg_ch.keys()}
+            key: np.zeros(self.total_length, dtype=complex) for key in self.awg_ch.keys()}
         waveform_idx = 0
         for key, port_manager in self.port.items():
             # awg_info = self.awg_info[key]
@@ -399,14 +483,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             awg = self.awg[awg_index]
             port = port_manager.port
             port_manager.update_frequency()
+            waveform = np.append(port.waveform, np.zeros(delay, dtype=complex))
             if "readout" in port.name:
                 del waveform_awg[key]
                 dig_ch = self.digitizer_ch[key]
-                waveform = port.waveform
-                # plt.plot(waveform.real)
-                if noise_variance > 0:
-                    waveform += rng.normal(scale=np.sqrt(noise_variance),
-                                           size=len(waveform))
 
                 if isinstance(awg_ch, tuple):
                     try:
@@ -445,7 +525,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                              dig_ch.sampling_interval())
 
             else:
-                waveform = port.waveform
                 waveform_awg[key] += waveform
 
         for key, waveform in waveform_awg.items():
@@ -473,10 +552,11 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     waveform_idx, trigger="software/hvi", cycles=cycles)
                 waveform_idx += 1
 
-    def run(self, sequence: Sequence, demodulate=True, averaging_shot=None, averaging_waveform=None, as_complex=True):
-
+    def run(self, sequence: Sequence, demodulate=True, averaging_shot=None, averaging_waveform=None, as_complex=True, lo_switch=True):
+        
+        # self.sequence[10].draw()
         self.load_sequence(sequence, self.num_shot)
-
+        # self.sequence[10].draw()
         if averaging_shot is None:
             averaging_shot = self.averaging_shot
         if averaging_waveform is None:
@@ -484,17 +564,14 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
 
         self.hvi_trigger.digitizer_delay(self.acquisition_delay)  # ns
         self.hvi_trigger.trigger_period(
-            int((self.repetition_margin + self.seq_len)/10+1)*10)  # ns
+            int((self.repetition_margin + self.total_length)/10+1)*10)  # ns
 
         # self.set_acquisition_mode(averaging_shot, averaging_waveform)
         try:
             # for name, cur in self.current_source.items():
             #     cur.output('on')
-            for name, lo in self.lo.items():
-                try:
-                    lo.output(True)
-                except:
-                    lo.on()
+            if lo_switch:
+              self.lo_output_switch(True)
             for awg_index, awg_ch in self.awg_ch.values():
                 awg = self.awg[awg_index]
                 if isinstance(awg_ch, tuple):
@@ -520,8 +597,6 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 data_return = {}
                 for key, d in data.items():
                     data_return[key] = d.mean(axis=0)
-                # assuming only 1 readout, should be extended to more than 1 readout
-                # self.data = data_return
                 if demodulate:
                     data_return = self.demodulate(
                         data_return, averaging_waveform, as_complex)
@@ -531,26 +606,24 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 data_return = {}
                 for key, d in data.items():
                     data_return[key] = d
-                # assuming only 1 readout, should be extended to more than 1 readout
                 if demodulate:
                     data_return = self.demodulate(
                         data_return, averaging_waveform, as_complex)
                 return data_return
 
         finally:
-            self.stop()
+            self.stop(lo_switch)
 
-    def stop(self):
+    def stop(self, lo_switch):
         self.hvi_trigger.output(False)
         for awg in self.awg.values():
             awg.stop_all()
         for dig in self.digitizer_ch.values():
             dig.stop()
-        for name, lo in self.lo.items():
-            try:
-                lo.output(False)
-            except:
-                lo.on()
+        if lo_switch:
+            self.lo_output_switch(False)
+                # lo.off()
+                # time.sleep(1e-3)
         # for name, cur in self.current_source.items():
         #     cur.output('off')
 
@@ -562,8 +635,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     self.digitizer_ch[key].sampling_interval() * 1e-9
                 if averaging_waveform:
                     if self.port[key].window is None:
-                        data_demod[key] = (
-                            data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t)).mean(axis=-1)
+                        data_demod[key] = np.mean(data * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t), axis=-1)
                     else:
                         d = data * np.exp(2j * np.pi *
                                         self.port[key].port.if_freq*1e9 * t)
@@ -586,7 +658,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                         demod_window = self.port[key].window
                         if demod_window is None:
                             data_demod[key].append(
-                                data_each * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t)).mean(axis=-1)
+                                np.mean(data_each * np.exp(2j * np.pi * self.port[key].port.if_freq*1e9 * t), axis=-1))
                         else:
                             d_each = data_each * np.exp(2j * np.pi *
                                             self.port[key].port.if_freq*1e9 * t)
@@ -631,10 +703,59 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         writer.save_text("wiring.md", self.wiring_info)
         writer.save_dict("station_snapshot.json", self.station.snapshot())
 
-    def show_sweep_plan(self):
-        if self.variables is None:
+    def show_sweep_plan(self, show_all=False, index=[]):
+        if (self.variables is None) and (not isinstance(self.sequence, list)):
             self.sequence.draw()
+        elif isinstance(self.sequence, list):
+            if show_all:
+                for seq in self.sequence:
+                    seq.draw()
+            else:
+                for idx in index:
+                    self.sequence[idx].draw()
         else:
-            for update_command in self.variables.update_command_list:
-                self.sequence.update_variables(update_command)
-            self.sequence.draw()
+            if show_all:
+                for update_command in self.variables.update_command_list:
+                    self.sequence.update_variables(update_command)
+                    self.sequence.draw()
+            else:
+                if len(index) != 0:
+                    for i, update_command in enumerate(self.variables.update_command_list):
+                        self.sequence.update_variables(update_command)
+                        if i in index:  
+                            self.sequence.draw()
+                else:
+                    for i, update_command in enumerate(self.variables.update_command_list):
+                        self.sequence.update_variables(update_command)
+                    self.sequence.draw()
+
+                    
+
+
+    def lo_output_switch(self, state):
+        for name, lo in self.lo.items():
+            if lo is None:
+                pass
+            else:
+                lo.output(state)
+
+    def is_in_range(self, x):
+        lower_limit = 1150
+        upper_limit = 1630
+
+        if x < lower_limit:
+            return 0
+
+        # Calculate the minimum and maximum values of n for which the condition holds
+        max_n = (x - lower_limit) // 1600
+        min_n = (x - upper_limit) // 1600
+        possible_n = np.arange(min_n, max_n+1)
+
+        # Check if x is within the valid range for any n
+        for n in possible_n:
+            if lower_limit + n * 1600 <= x <= upper_limit + n * 1600:
+                k = ((upper_limit + n * 1600 - x) // 20 + 1) * 20
+                # print(x, k)
+                return k
+
+        return 0

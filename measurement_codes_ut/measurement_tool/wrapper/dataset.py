@@ -28,14 +28,14 @@ class Dataset(object):
 
         """
         
-        if isinstance(session, Session):
-            pass
-        else:
-            raise TypeError("Unknown argument type")
+        # if isinstance(session, Session):
+        #     pass
+        # else:
+        #     raise TypeError("Unknown argument type")
 
 
 
-    def load(self, dataset_id: int, dataset_path: str="") -> None:
+    def load(self, dataset_id: int, dataset_path: str="", log=True) -> None:
         """Load dataset
 
         Args:
@@ -51,9 +51,11 @@ class Dataset(object):
                 data_all.append(save_path+date+f)
 
         if dataset_id > len(data_all)-1:
-            raise ValueError("dataset index larger than the number of experiments.")
+            raise ValueError(f"Dataset id.{dataset_id} is larger than the number of experiments in {save_path}.")
         else:
             # print(data_all)
+            if log:
+                print(f"Load dataset id.{dataset_id} from {save_path}.")
             self.path = data_all[dataset_id]
             self.data = datadict_from_hdf5(self.path+"/data")
             self.name = data_all[dataset_id].split("/")[-1][33:]

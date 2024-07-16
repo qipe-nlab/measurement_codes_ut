@@ -64,6 +64,7 @@ class FindCavityPeak(object):
         readout_port = tdm.port['readout'].port
         acq_port = tdm.acquire_port['readout_acquire']
         qubit_port = tdm.port['qubit'].port
+        tdm.port['readout'].window = None
 
         ports = [readout_port, qubit_port, acq_port]
 

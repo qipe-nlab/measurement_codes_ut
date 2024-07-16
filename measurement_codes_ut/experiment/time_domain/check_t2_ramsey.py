@@ -89,7 +89,10 @@ class CheckT2Ramsey(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq + self.hand_detune
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = (qubit_freq+self.hand_detune)/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq + self.hand_detune
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 

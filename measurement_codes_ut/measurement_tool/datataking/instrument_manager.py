@@ -1,29 +1,33 @@
 import numpy as np
 from logging import getLogger
+import time
 
 import numpy as np
 import qcodes as qc
-from qcodes.instrument_drivers.rohde_schwarz.SGS100A import RohdeSchwarz_SGS100A
+from qcodes_drivers.SGS100A import SGS100A
 from qcodes_drivers.E82x7 import E82x7
 from qcodes_drivers.N51x1 import N51x1
 from qcodes_drivers.HVI_Trigger import HVI_Trigger
 from qcodes_drivers.iq_corrector import IQCorrector
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
-try:
-    from qcodes_drivers.APMSYN22 import APMSYN22
-except:
-    pass
+from qcodes_drivers.APMSYN22 import APMSYN22
+from qcodes.instrument_drivers.yokogawa.GS200 import GS200
+from qcodes_drivers.E4407B import E4407B
+from qcodes_drivers.M9804A import M9804A_LO
+from qcodes_drivers.HS900xB import HS900xB
+from qcodes_contrib_drivers.drivers.Vaunix.LDA import Vaunix_LDA
+from qcodes_contrib_drivers.drivers.Vaunix.LDA_eth import Vaunix_LDA_Eth as LDA_eth
+
 from sequence_parser import Port, Sequence
 from sequence_parser.iq_port import IQPort
-from qcodes.instrument_drivers.yokogawa.GS200 import GS200
-from .port_manager import PortManager
-from qcodes_drivers.E4407B import E4407B
 
 import matplotlib.pyplot as plt
 
 from measurement_codes_ut.measurement_tool import Session
 from qcodes_drivers.iq_corrector import IQCorrector
+from qcodes.instrument.base import Instrument, InstrumentBase
+from .port_manager import PortManager
 
 logger = getLogger(__name__)
 
@@ -36,35 +40,15 @@ class InstrumentManagerBase(object):
 
         Args:
             session (Session): session of measurement
-            config_name (str): default config name of instruments
+            trigger_address (str): address of HVI trigger
+            save_path (str): data save path
         """
         print("Creating a new insturment management class for timedomain measurement...", end="")
 
         self.session = session
         self.station = qc.Station()
 
-        self.lo = {}
-        self.lo_address = {}
-        self.lo_info = {"model": [], "address": [], "channel": [], "port": []}
-        self.awg = {}
-        self.awg_ref = {}
-        self.awg_info = {"model": [], "address": [], "channel": [], "port": []}
-        self.digitizer_ch = {}
-        self.digitizer = {}
-        self.dig_info = {"model": [], "address": [], "channel": [], "port": []}
-        self.current_source = {}
-        self.current_info = {"model": [],
-                             "address": [], "channel": [], "port": []}
-
-        self.port = {}
-        self.acquire_port = {}
-
-        self.IQ_corrector = {}
-        self.lo_id = 0
-        self.awg_id = 0
-        self.dig_id = 0
-        self.awg_id_dict = {}
-        self.awg_ch = {}
+        self.reset_manager()
 
         self.averaging_shot = False
         self.averaging_waveform = False
@@ -109,38 +93,70 @@ class InstrumentManagerBase(object):
             awg_slot (int): Slot index of AWG
             channel_name (str): Channel name like "qubit", "readout", "ef", "fogi"
         """
-
-        lo_dummy = E82x7(f"lo_{self.lo_id}", lo_address)
-        model = lo_dummy.IDN()['model']
-        self.lo_info['model'].append(model)
-        self.lo_info['address'].append(lo_address)
-        self.lo_info['channel'].append("")
-        self.lo_info['port'].append(port_name)
-        lo_dummy.close()
-        # print(model)
-        if lo_address not in self.lo_address.values():
-            if "E82" in model:
-                lo = E82x7(f"lo_{self.lo_id}", lo_address)
-                lo.output(False)
-            elif "N51" in model:
-                lo = N51x1(f"lo_{self.lo_id}", lo_address)
-                lo.output(False)
-            elif "SGS" in model:
-                lo = RohdeSchwarz_SGS100A(f"lo_{self.lo_id}", lo_address)
-                lo.off()
-            elif "AP" in model:
-                lo = APMSYN22(f"lo_{self.lo_id}", lo_address)
-                lo.output(False)
-
-
+        if isinstance(lo_address, tuple):
+            addr, channel = lo_address
+            
+            if addr not in self.lo_address.values():
+                lo_base = HS900xB(f"lo_{self.lo_id}", addr)
+                model = lo_base.IDN()['model']
+                self.lo_info['model'].append(model)
+                self.lo_info['address'].append(addr)
+                self.lo_info['channel'].append(f"CH{channel}")
+                self.lo_info['port'].append(port_name)
+                self.lo_shared[addr] = lo_base
+            else:
+                lo_base = self.lo_shared[addr]
+                model = lo_base.IDN()['model']
+                self.lo_info['model'].append(model)
+                self.lo_info['address'].append(addr)
+                self.lo_info['channel'].append(f"CH{channel}")
+                self.lo_info['port'].append(port_name)
+            ref_dict = {1: lo_base.CH1, 2: lo_base.CH2, 3: lo_base.CH3, 4: lo_base.CH4, 5: lo_base.CH5}
+            lo = ref_dict[channel]
+            lo.output(False)
             lo.power(lo_power)
+            lo.parent.ref("ext10")
             lo.frequency(10e9 - if_freq)
             self.lo[port_name] = lo
-            self.lo_address[self.lo_id] = lo_address
+            self.lo_address[self.lo_id] = addr
             self.station.add_component(lo)
             self.lo_id += 1
+
+        elif lo_address != "":
+            lo_dummy = E82x7(f"lo_{self.lo_id}", lo_address)
+            model = lo_dummy.IDN()['model']
+            self.lo_info['model'].append(model)
+            self.lo_info['address'].append(lo_address)
+            self.lo_info['channel'].append("")
+            self.lo_info['port'].append(port_name)
+            lo_dummy.close()
+            # print(model)
+            if lo_address not in self.lo_address.values():
+                if "E82" in model:
+                    lo = E82x7(f"lo_{self.lo_id}", lo_address)
+                elif "N51" in model:
+                    lo = N51x1(f"lo_{self.lo_id}", lo_address)
+                elif "SGS" in model:
+                    lo = SGS100A(f"lo_{self.lo_id}", lo_address)
+                elif "AP" in model:
+                    lo = APMSYN22(f"lo_{self.lo_id}", lo_address)
+                elif "M98" in model:
+                    lo = M9804A_LO(f"lo_{self.lo_id}", lo_address)
+                    lo.sweep_mode('continuous')
+                    lo.trigger_source("manual")
+
+                lo.output(False)
+                lo.power(lo_power)
+                lo.frequency(10e9 - if_freq)
+                self.lo[port_name] = lo
+                self.lo_address[self.lo_id] = lo_address
+                self.station.add_component(lo)
+                self.lo_id += 1
+            else:
+                print(f"LO {lo_address} already allocated.")
         else:
-            print(f"LO {lo_address} already allocated.")
+                self.lo[port_name] = None
+                self.lo_address[self.lo_id] = lo_address
 
         self.awg_info['model'].append("M3202A")
         self.awg_info['address'].append("")
@@ -200,7 +216,6 @@ class InstrumentManagerBase(object):
                 )
 
         self.awg_ref[port_name] = {'chasis': awg_chasis, 'slot': awg_slot}
-
         self.port[port_name] = PortManager(
             port_name, self.lo[port_name], if_freq, sideband)
 
@@ -257,7 +272,7 @@ class InstrumentManagerBase(object):
             if dig_channel == 4:
                 dig_ch = dig.ch4
             dig_ch.high_impedance(False)  # 50 Ohms
-            dig_ch.half_range_50(0.125)  # V_pp / 2
+            dig_ch.half_range_50(4)  # V_pp / 2
             dig_ch.ac_coupling(False)  # dc coupling
             dig_ch.sampling_interval(2)  # ns
             dig_ch.trigger_mode("software/hvi")
@@ -392,6 +407,30 @@ class InstrumentManagerBase(object):
         spectrum_analyzer = E4407B(name, address)
         self.spectrum_analyzer = spectrum_analyzer
 
+    def add_variable_attenuator(self, name: str,
+                       address: str,
+                       channel: int) -> None:
+        """method to add Vaunix variable attenuator 
+
+        Args:
+            name (str): name of the port
+            address (str): IP address of the instrument
+            channel (int): channel you use
+        """
+        vaunix_dll = r"F:\vaunix_dll"
+        # vatt = LDA_eth('lda', address, dll_path=vaunix_dll, num_channels=4)
+        if address not in self.vatt_info:
+            vatt = LDA_eth(f'lda_{self.vatt_id}', address, dll_path=vaunix_dll, num_channels=4)
+            self.station.add_component(vatt)
+            self.vatt_info[address] = vatt
+            self.vatt_id += 1
+            # self.vatt_addr.append(address)
+        else:
+            vatt = self.vatt_info[address]
+        ref_dict = {1: vatt.ch1, 2: vatt.ch2, 3: vatt.ch3, 4: vatt.ch4}
+        vatt_ch = ref_dict[channel]
+        self.vatt[name] = vatt_ch
+    
     def add_iq_corrector(self, IQ_corrector, port_name, awg_channel):
         self.IQ_corrector[port_name] = IQCorrector(
             awg_channel[0],
@@ -431,7 +470,7 @@ class InstrumentManagerBase(object):
         s = ""
         s += "*** Allocated devices and channel assignemnt ***\n"
         s += "{:20} {:20} {:40} {:30} {:15}\n".format(
-            "device type", "device name", "device address", "channel", "port")
+            "Device type", "Device name", "Device address", "Channel", "Port")
         s += "-" * (20 + 20 + 40 + 30 + 15) + "\n"
         for _ in range(len(self.lo_info['model'])):
             device_type = "LO"
@@ -469,6 +508,15 @@ class InstrumentManagerBase(object):
 
             s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
 
+        for key, device in self.vatt.items():
+            device_type = "LDA"
+            device_name = device._parent.IDN()['model']
+            address = device._parent.ip_address
+            channel = f"ch{device.channel_number}"
+            dep_port = key
+
+            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+
         device_type = "HVI trigger"
         device_name = self.hvi_trigger.IDN()['model']
         address = self.trigger_address
@@ -479,7 +527,7 @@ class InstrumentManagerBase(object):
 
         s += "\n\n*** Port status ***\n"
         s += "{:20} {:20} {:20}\n".format(
-            "port name", "frequency (GHz)", "IF frequency (MHz)")
+            "Port name", "Frequency (GHz)", "IF frequency (MHz)")
         s += "-" * (20 + 20 + 20) + "\n"
         for key, value in self.port.items():
             name = key
@@ -488,48 +536,79 @@ class InstrumentManagerBase(object):
 
             s += f"{name:<20} {freq:<20.6f} {if_freq:<20.1f}\n"
 
-        s += "\n\n*** Current source status ***\n"
-        s += "{:20} {:20}\n".format(
-            "port name", "current (mA)")
-        s += "-" * (20 + 20) + "\n"
-        for key, value in self.current_source.items():
-            name = key
-            cur = value.current()*1e3
 
-            s += f"{name:<20} {cur:<20.6f}\n"
+        if len(self.current_source) > 0:
+            s += "\n\n*** Current source status ***\n"
+            s += "{:20} {:20} {:20}\n".format(
+                "Port name", "Current (mA)", "Output")
+            s += "-" * (20 + 20 + 20) + "\n"
+            for key, value in self.current_source.items():
+                name = key
+                cur = value.current()*1e3
+                if_output = value.output()
+
+                s += f"{name:<20} {cur:<20.6f} {if_output:<20}\n"
+
+                
+        if len(self.vatt) > 0:
+            s += "\n\n*** LDA status ***\n"
+            s += "{:20} {:20} {:30}\n".format(
+                "Port name", "Attenuation (dB)", "Working frequency (GHz)")
+            s += "-" * (20 + 20 + 30) + "\n"
+            for key, value in self.vatt.items():
+                name = key
+                att = value.attenuation()
+                fw = value.working_frequency() * 1e-9
+
+                s += f"{name:<20} {att:<20.1f} {fw:<20.4f}\n"
 
         return s
+    
 
     def close_all(self):
-        self.hvi_trigger.close()
-        print(f"Connection to HVI trigger closed.")
-        for name, lo in self.lo.items():
-            try:
-                lo.close()
-                print(f"Connection to LO {name} closed.")
-            except:
-                pass
-        for name, dig in self.digitizer.items():
-            try:
-                dig.close()
-                print(f"Connection to Digitizer {name} closed.")
-            except:
-                pass
-        for name, awg in self.awg.items():
-            try:
-                awg.close()
-                print(f"Connection to AWG {name} closed.")
-            except:
-                pass
-        for name, cs in self.current_source.items():
-            try:
-                cs.close()
-                print(f"Connection to Current Source {name} closed.")
-            except:
-                pass
+        for c in tuple(self.station.components.values()):
+            if isinstance(c, Instrument):
+                if isinstance(c, str):
+                    c = Instrument.find_instrument(c)
+
+                self.station._monitor_parameters = [v for v in self.station._monitor_parameters
+                                            if v.root_instrument is not c]
+                # remove instrument from station snapshot
+                self.station.remove_component(c.name)
+                # del will remove weakref and close the instrument
+                c.close_all()
+                del c
+            elif hasattr(c, "parent"):
+                # c = c.parent
+                self.station._monitor_parameters = [v for v in self.station._monitor_parameters
+                                            if v.root_instrument is not c]
+                # remove instrument from station snapshot
+                self.station.remove_component(c.name)
+                # del will remove weakref and close the instrument
+                c.parent.close_all()
+                del c
+
+        self.reset_manager()
+        # time.sleep(20)
+
+
+    def close_all_except_trigger(self):
+        self.close_all()
+        if self.trigger_address != "":
+            hvi_trigger = HVI_Trigger(
+                "hvi_trigger", self.trigger_address, debug=False)
+            hvi_trigger.output(False)
+            hvi_trigger.digitizer_delay(self.acquisition_delay)
+            hvi_trigger.trigger_period(self.repetition_margin)
+            self.hvi_trigger = hvi_trigger
+
+            self.station.add_component(hvi_trigger)
+
+    def reset_manager(self):
 
         self.lo = {}
         self.lo_address = {}
+        self.lo_shared = {}
         self.lo_info = {"model": [], "address": [], "channel": [], "port": []}
         self.awg = {}
         self.awg_ref = {}
@@ -550,4 +629,11 @@ class InstrumentManagerBase(object):
         self.dig_id = 0
         self.awg_id_dict = {}
         self.awg_ch = {}
+        
+        self.vatt = {}
+        self.vatt_info = {}
+        self.vatt_id = 0
+        
         self.hvi_trigger = None
+        
+

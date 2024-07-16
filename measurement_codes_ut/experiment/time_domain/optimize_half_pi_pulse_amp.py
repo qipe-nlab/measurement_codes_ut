@@ -78,7 +78,10 @@ class OptimizeHalfPiAmp(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = note.qubit_dressed_frequency/1e9
+        else:
+            tdm.port['qubit'].frequency = note.qubit_dressed_frequency
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 
@@ -145,7 +148,7 @@ class OptimizeHalfPiAmp(object):
 
         plot_amp = np.linspace(amp_range[0], amp_range[-1], 101)
 
-        plt.figure(figsize=(8, 6))
+        plt.figure()
 
         self.data_label = dataset.path.split("/")[-1][27:]
         plt.title(f"{self.data_label}")

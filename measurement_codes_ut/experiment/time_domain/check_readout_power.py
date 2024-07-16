@@ -58,6 +58,7 @@ class CheckReadoutPower(object):
         qubit_port = tdm.port['qubit'].port
 
         tdm.port['readout'].frequency = readout_freq - 100e6
+        tdm.port['readout'].window = None
         ports = [readout_port, acq_port, qubit_port]
 
         tdm.set_repetition_margin(self.repetition_margin)

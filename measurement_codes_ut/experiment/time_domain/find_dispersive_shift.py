@@ -84,7 +84,10 @@ class FindDispersiveShift(object):
         qubit_freq = note.qubit_dressed_frequency
 
 
-        tdm.port['qubit'].frequency = qubit_freq
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = qubit_freq/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq
 
         pi_pulse_power = note.pi_pulse_power
 
@@ -92,6 +95,7 @@ class FindDispersiveShift(object):
                             + self.sweep_offset + 0.5*self.sweep_range, self.num_step)
         
         tdm.port['readout'].frequency = readout_freq + shift
+        tdm.port['readout'].window = None
         
         amp_list = [0, pi_pulse_power]
         

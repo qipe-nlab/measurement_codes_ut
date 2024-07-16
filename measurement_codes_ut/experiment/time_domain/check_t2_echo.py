@@ -36,7 +36,6 @@ class CheckT2Echo(object):
         "pi_pulse_power",
         "cavity_readout_amplitude",
         "cavity_readout_window_coefficient",
-        "rabi_t1",
         "t1",
         "readout_pulse_length"
     ]
@@ -85,7 +84,10 @@ class CheckT2Echo(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = qubit_freq/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 

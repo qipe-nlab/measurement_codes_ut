@@ -9,7 +9,7 @@ class PlotHelper(object):
     This class helps to plot data in unified ways, such as fontsize, colors, etc.
     This class is a simple wrapper of matplotlib, and user can additionally call matplotlib functions between each function call.
     """
-    def __init__(self, title, rows = 1, columns = 1, width = 8, height = 6, color_map_name = "Set1"):
+    def __init__(self, title, rows = 1, columns = 1, width = 8.6/2.54, height = 7.5/2.54, color_map_name = "Set1"):
         """Initializer of helper class
 
         Args:
@@ -19,16 +19,18 @@ class PlotHelper(object):
             width (flaot): Width of figure for each subplot in inch.
             height (float): Height of figure for each subplot in inch. 
         """
+        inch_w = 8.6/2.54
         plt.rcParams['xtick.top']           = True
         plt.rcParams['ytick.right']         = True
-        plt.rcParams['ytick.minor.visible'] = False
-        plt.rcParams['xtick.major.width']   = 0.5
-        plt.rcParams['ytick.major.width']   = 0.5
-        plt.rcParams['font.size']           = 16
-        plt.rcParams['axes.linewidth']      = 1.0
+        # plt.rcParams['ytick.minor.visible'] = False
+        # plt.rcParams['xtick.major.width']   = 0.5
+        # plt.rcParams['ytick.major.width']   = 0.5
+        plt.rcParams['font.size']           = 8
         plt.rcParams['xtick.direction']     = 'in'
         plt.rcParams['ytick.direction']     = 'in'
         plt.rcParams['font.family']         = 'Arial'
+        plt.rcParams['figure.dpi']         = 150
+        plt.rcParams['figure.figsize'] = [inch_w, 0.7*inch_w]
         # plt.rcParams["mathtext.fontset"]    = 'stixsans'
 
         self.rows = rows
@@ -97,6 +99,7 @@ class PlotHelper(object):
             plt.ylabel(process_tuple(yproperty))
         else:
             plt.ylabel(yproperty)
+        plt.tight_layout()
 
     def _get_color(self, is_same_color):
         # Get color of current plot.
@@ -151,6 +154,8 @@ class PlotHelper(object):
 
         if y_processed is not None or y_fit is not None or y_init is not None or len(label)>0:
             plt.legend()
+        plt.tight_layout()
+    
 
     def plot_complex(self, data, label = "", fit=None, init=None, processed=None, is_same_color = False, line_for_data = True, adjust_datalimit = True):
         """Plot scattering plot for IQ-response.
@@ -190,6 +195,7 @@ class PlotHelper(object):
             plt.gca().set_aspect('equal', adjustable="datalim")
         else:
             plt.gca().set_aspect('equal', adjustable='box')
+        plt.tight_layout()
 
 
     def plot_2d_heatmap(self, x, y, matrix, label = "", is_phase = False):
@@ -221,6 +227,7 @@ class PlotHelper(object):
         plt.pcolormesh(mesh_x, mesh_y, matrix.T, cmap=cmap, shading="auto")
         plt.axis([x[0], x[-1], y[0], y[-1]])
         plt.colorbar()
+        plt.tight_layout()
         #plt.tight_layout()
 
 
@@ -238,6 +245,7 @@ class PlotHelper(object):
             array = matrix[:,index]
             plt.plot(x,array+height*index,label="y={}".format(yval))
         plt.legend()
+        plt.tight_layout()
 
     def axvspan(self, xmin, xmax, facecolor="k", alpha=0.3):
         plt.axvspan(xmin=xmin,xmax=xmax,facecolor=facecolor,alpha=alpha)

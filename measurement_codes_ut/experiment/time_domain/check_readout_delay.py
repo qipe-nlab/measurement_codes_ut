@@ -57,6 +57,7 @@ class CheckReadoutDelay(object):
         qubit_port = tdm.port['qubit'].port
 
         tdm.port['readout'].frequency = readout_freq - 100e6
+        tdm.port['readout'].window = None
 
         ports = [readout_port, qubit_port, acq_port]
 

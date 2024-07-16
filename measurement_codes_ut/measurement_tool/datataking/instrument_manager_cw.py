@@ -3,7 +3,9 @@ from logging import getLogger
 
 import numpy as np
 import qcodes as qc
-from qcodes.instrument_drivers.rohde_schwarz.SGS100A import RohdeSchwarz_SGS100A
+# from qcodes.instrument_drivers.rohde_schwarz.SGS100A import RohdeSchwarz_SGS100A
+from qcodes_drivers.SGS100A import SGS100A
+from qcodes_drivers.Valon501x import Valon501x
 from qcodes_drivers.E82x7 import E82x7
 from qcodes_drivers.N51x1 import N51x1
 from qcodes_drivers.M3102A import M3102A
@@ -13,8 +15,11 @@ from qcodes_drivers.E4407B import E4407B
 from qcodes_drivers.N5222A import N5222A
 from qcodes_drivers.M9804A import M9804A
 from qcodes_drivers.E5071C import E5071C
+from qcodes_drivers.APMSYN22 import APMSYN22
+from qcodes_contrib_drivers.drivers.Vaunix.LDA_eth import Vaunix_LDA_Eth as LDA_eth
 
 from .port_manager_cw import PortManager
+from qcodes.instrument.base import Instrument, InstrumentBase
 
 import matplotlib.pyplot as plt
 
@@ -31,30 +36,20 @@ class InstrumentManagerBase(object):
 
         Args:
             session (Session): session of measurement
+            save_path (str): data save path
         """
 
         self.session = session
         self.station = qc.Station()
 
-        self.lo = None
-        self.lo_info = {"model": [], "address": [], "port": []}
 
-        self.vna = None
-        self.vna_info = {"model": [], "address": [], "port": []}
+        self.reset_manager()
         
-        self.current_source = None
-        self.current_info = {"model": [],
-                             "address": [], "port": []}
-        
-        self.port = {}
-
-
-        self.lo_id = 0
-
         self.tags = ["CW", session.cooling_down_id, session.package_name]
         if save_path[-1] != "/" and save_path[-2:] != "\\":
             save_path += "/"
-        self.save_path = save_path
+        self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}/"
+
 
     def add_readout_line(self,
                          port_name: str,
@@ -63,7 +58,7 @@ class InstrumentManagerBase(object):
         if self.vna is not None:
             raise ValueError("More than 1 VNA is allocated.")
         
-        vna_dummy = N5222A(f"lo_{self.lo_id}", vna_address)
+        vna_dummy = N5222A(f"vna", vna_address)
         model = vna_dummy.IDN()['model']
         self.vna_info['model'].append(model)
         self.vna_info['address'].append(vna_address)
@@ -75,7 +70,7 @@ class InstrumentManagerBase(object):
             vna.aux1.output_polarity("negative")
             vna.aux1.output_position("after")
             vna.aux1.aux_trigger_mode("point")
-            vna.meas_trigger_input_type("level")
+            vna.meas_trigger_input_type("edge")
             vna.meas_trigger_input_polarity("positive")
         elif "M98" in model:
             vna = M9804A("vna", vna_address)
@@ -85,7 +80,7 @@ class InstrumentManagerBase(object):
             vna.meas_trigger_input_type("level")
             vna.meas_trigger_input_polarity("positive")
         elif "E50" in model:
-            raise ValueError("ENA-type device is not supported now.")
+            raise ValueError("ENA is not supported.")
             # vna = E5071C("vna", vna_address)
             # vna.trigger_output_polarity("negative")
             # vna.trigger_output_position("after")
@@ -99,7 +94,7 @@ class InstrumentManagerBase(object):
         self.station.add_component(vna)
         self.vna = vna
 
-        self.port[port_name] = PortManager(self.vna, "VNA")
+        self.port[port_name] = PortManager(self.vna, 2)
 
     def add_drive_line(self,
                        port_name: str,
@@ -116,30 +111,33 @@ class InstrumentManagerBase(object):
         self.lo_info['port'].append(port_name)
         lo_dummy.close()
         # print(model)
-        if "E82" in model:
-            lo = E82x7(f"lo_{self.lo_id}", lo_address)
-            lo.trigger_input_slope("negative")
-            # lo.source_settled_polarity("low")
-            lo.output(False)
-        elif "N51" in model:
-            lo = N51x1(f"lo_{self.lo_id}", lo_address)
-            lo.output(False)
-            print("Drive source other than E82x7 is not supported. May occur unexpected things.")
-        elif "SGS" in model:
-            lo = RohdeSchwarz_SGS100A(f"lo_{self.lo_id}", lo_address)
-            lo.off()
-            print("Drive source other than E82x7 is not supported. May occur unexpected things.")
-        else:
-            raise ValueError(f"Model {model} is not supported.")
+        if lo_address not in self.lo_address.values():
+            if "E82" in model:
+                lo = E82x7(f"lo_{self.lo_id}", lo_address)
+                lo.trigger_input_slope("negative")
+                # lo.source_settled_polarity("low")
+            elif "N51" in model:
+                lo = N51x1(f"lo_{self.lo_id}", lo_address)
+                print("Drive source other than E82x7 is not supported. May occur unexpected things.")
+            elif "SGS" in model:
+                lo = SGS100A(f"lo_{self.lo_id}", lo_address)
+                print("Drive source other than E82x7 is not supported. May occur unexpected things.")
+            elif "V" in model:
+                lo = SGS100A(f"lo_{self.lo_id}", lo_address)
+                print("Drive source other than E82x7 is not supported. May occur unexpected things.")
+            else:
+                raise ValueError(f"Model {model} is not supported.")
         
+        lo.output(False)
         lo.power(lo_power)
         lo.frequency(10e9)
-        self.lo = lo
+        self.lo[port_name] = lo
+        self.lo_address[self.lo_id] = lo_address
         # self.lo_address[self.lo_id] = lo_address
         self.station.add_component(lo)
         self.lo_id += 1
 
-        self.port[port_name] = PortManager(lo, "LO")
+        self.port[port_name] = PortManager(lo, 1)
 
     def add_current_source_bias_line(self, 
                                      port_name: str,
@@ -159,16 +157,39 @@ class InstrumentManagerBase(object):
         current_source = GS200(
             port_name+"_current_source", current_source_address)
         # current_source.ramp_current(0e-6, step=1e-7, delay=0)
-        self.current_source = current_source
+        self.current_source[port_name] = current_source
             # self.station.add_component(current_source)
 
             
-        self.port[port_name] = PortManager(current_source, "Current source")
+        self.port[port_name] = PortManager(current_source, 2)
 
     def add_spectrum_analyzer(self, name="spectrum_analyzer", address='GPIB0::16::INSTR'):
         spectrum_analyzer = E4407B(name, address)
         self.spectrum_analyzer = spectrum_analyzer
 
+    # def add_variable_attenuator(self, name: str,
+    #                    address: str,
+    #                    channel: int) -> None:
+    #     """method to add Vaunix variable attenuator 
+
+    #     Args:
+    #         name (str): name of the port
+    #         address (str): IP address of the instrument
+    #         channel (int): channel you use
+    #     """
+    #     vaunix_dll = r"F:\vaunix_dll"
+    #     vatt = LDA_eth('lda', address, dll_path=vaunix_dll, num_channels=4)
+    #     if address not in self.vatt_base:
+    #         vatt = LDA_eth('lda', address, dll_path=vaunix_dll, num_channels=4)
+    #         self.station.add_component(vatt)
+    #         self.vatt_base[address] = vatt
+    #         self.vatt_id += 1
+    #         # self.vatt_addr.append(address)
+    #     else:
+    #         vatt = self.vatt_base[address]
+    #     ref_dict = {1: vatt.ch1, 2: vatt.ch2, 3: vatt.ch3, 4: vatt.ch4}
+    #     vatt_ch = ref_dict[channel]
+    #     self.vatt[name] = vatt_ch
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
 
@@ -233,34 +254,40 @@ class InstrumentManagerBase(object):
         return s
 
     def close_all(self):
-        for name, lo in self.lo.items():
-            try:
-                lo.close()
-                print(f"Connection to LO {name} closed.")
-            except:
-                pass
+        for c in tuple(self.station.components.values()):
+            if isinstance(c, Instrument):
+                if isinstance(c, str):
+                    c = Instrument.find_instrument(c)
 
-        for name, vna in self.vna.items():
-            try:
-                vna.close()
-                print(f"Connection to VNA {name} closed.")
-            except:
-                pass
-        for name, cs in self.current_source.items():
-            try:
-                cs.close()
-                print(f"Connection to Current Source {name} closed.")
-            except:
-                pass
+                self.station._monitor_parameters = [v for v in self.station._monitor_parameters
+                                            if v.root_instrument is not c]
+                # remove instrument from station snapshot
+                self.station.remove_component(c.name)
+                # del will remove weakref and close the instrument
+                c.close_all()
+                del c
+            elif hasattr(c, "parent"):
+                # c = c.parent
+                self.station._monitor_parameters = [v for v in self.station._monitor_parameters
+                                            if v.root_instrument is not c]
+                # remove instrument from station snapshot
+                self.station.remove_component(c.name)
+                # del will remove weakref and close the instrument
+                c.parent.close_all()
+                del c
+        self.reset_manager()
 
-        self.lo = {}
-        self.lo_address = {}
-        self.lo_info = {"model": [], "address": [], "port": []}
-
+    def reset_manager(self):
         self.vna = {}
         self.vna_info = {"model": [], "address": [], "port": []}
+        self.lo = {}
+        self.lo_address = {}
+        self.lo_info = {"model": [], "address": [], "channel": [], "port": []}
         self.current_source = {}
         self.current_info = {"model": [],
-                             "address": [],  "port": []}
+                             "address": [], "channel": [], "port": []}
+
+        self.port = {}
 
         self.lo_id = 0
+        

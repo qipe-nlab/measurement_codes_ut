@@ -28,7 +28,7 @@ class CreatePiPulse(object):
         "cavity_dressed_frequency",
         "qubit_dressed_frequency",
         "qubit_full_linewidth",
-        "qubit_control_amplitude",
+        "rabi_pulse_amplitude",
         "rabi_frequency",
         "pi_pulse_length",
         "readout_pulse_length"
@@ -75,12 +75,16 @@ class CreatePiPulse(object):
         qubit_freq = note.qubit_dressed_frequency
 
         tdm.port['readout'].frequency = readout_freq
+        tdm.port['readout'].window = None
 
-        tdm.port['qubit'].frequency = qubit_freq
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = qubit_freq/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq
 
         rabi_period = (1./note.rabi_frequency)
         time_ratio = float(rabi_period / note.pi_pulse_length) * 3
-        max_power = min(note.qubit_control_amplitude *
+        max_power = min(note.rabi_pulse_amplitude *
                         time_ratio, qubit_port.max_amp)
 
         amp_range = np.linspace(0.0, max_power, self.num_point)

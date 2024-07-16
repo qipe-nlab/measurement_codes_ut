@@ -7,25 +7,38 @@ import time
 class PortManager(object):
 
     def __init__(self, device, dev_type):
+        """class for organizing ports used in CW
+
+        Args:
+            device (Instrument): Instrument object
+            dev_type (int): Index to specify device type
+                            0: VNA
+                            1: LO
+                            2: Current source
+        """
         # self.port = Port(name, if_freq/1e9, max_amp=1.5)
-        self.frequency = 8e9
-        self.power = None
-        self.current = 0.0
+        if dev_type != 2:
+            self.frequency = 8e9
+            self.power = 0
+        else:
+            self.current = 0.0
         self.status = False
         
         self.device = device
         self.type = dev_type
+        self.sweep_index = 0
 
     def set_frequency(self, frequency):
-        self.frequency = frequency
-        self.update_frequency()
+        if self.type != 2:
+            self.frequency = frequency
+            self.update_frequency()
 
     def update_frequency(self):
-        try:
+        if self.type != 2:
             time.sleep(0.01)
             self.device.frequency(self.frequency)
-        except:
-            pass
+        # except:
+        #     pass
 
     def set_status(self, status):
         self.status = status
@@ -35,35 +48,27 @@ class PortManager(object):
         self.device.output(self.status)
 
     def enable_output(self):
-        try:
-            self.device.output(True)
-        except:
-            self.device.on()
-
+        self.device.output(True)
+        
     def disable_output(self):
-        try:
-            self.device.output(False)
-        except:
-            self.device.off()
-
+        self.device.output(False)
 
     def set_power(self, power):
-        self.power = power
-        self.update_power()
+        if self.type != 2:
+            self.power = power
+            self.update_power()
 
     def update_power(self):
-        try:
+        if self.type != 2:
             self.device.power(self.power)
-        except:
-            pass
 
     def set_current(self, current):
-        self.current = current
-        self.update_current()
+        if self.type == 2:
+            self.current = current
+            self.update_current()
+            
 
     def update_current(self):
-        try:
-            self.device.ramp_current(self.current, step=1e-8, delay=0)
-        except:
-            pass
+        if self.type == 2:
+            self.device.ramp_current(self.current, step=5e-8, delay=0)
 

@@ -26,7 +26,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
 
         Args:
             session (Session): session of measurement
-            config_name (str): default config name of instruments
+            save_path (str): data save path
         """
         # print("Creating a new insturment management class for timedomain measurement...", end="")
         super().__init__(session, save_path)
@@ -46,7 +46,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         Returns:
             Dataset: taken dataset
         """
-        sweep = {"VNA_freq":None, "VNA_power":None, "LO_freq":None, "LO_power":None, "Current":None}
+        sweep_list = {"VNA_freq":None, "VNA_power":None, "LO_freq":None, "LO_power":None, "Current":None}
         
 
         for name, port in self.port.items():
@@ -82,20 +82,6 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
         # print(sweep_flag)
         vna = self.vna
         vna.s_parameter("S21")
-        try:
-            lo = self.lo
-        #     try:
-        #         lo.output(False)
-        #     except:
-        #         lo.off()
-        except:
-            pass
-        try:
-            current_source = self.current_source
-        #     current_source.off()
-        except:
-            pass
-
         vna.output(False)
         
         drive_flag = False
@@ -213,6 +199,7 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             drive_source.on()
         drive_source.start_sweep()
         vna.sweep_mode("single")
+        time.sleep(2)
         try:
             while not (vna.done() and drive_source.sweep_done()):
                 time.sleep(0.1)
@@ -231,5 +218,35 @@ class ContinuousWaveInstrumentManager(InstrumentManagerBase):
             writer.backup_file([exp_file, __file__])
         writer.save_text("wiring.md", self.wiring_info)
         writer.save_dict("station_snapshot.json", self.station.snapshot())
+        
+    def configure_sweep_parameter(self):
+        """_summary_
+        current and power must be swept by for-loop
+        frequency can be swept with trigger loop, thus require dedicated function        
+        """
+        sweep_list = []
+        vna_sweep = None
+        lo_sweep = None
+        for name, port in self.port.items():
+            if port.type != 2:
+                if isinstance(port.frequency, np.ndarray) or isinstance(port.frequency, list):
+                    if port.type == 0:
+                        vna_sweep = (name, port.frequency)
+                    else:
+                        lo_sweep = True
+                    sweep_list.append(name, port.type, port.frequency, port.sweep_index)
+                    
+                if isinstance(port.power, np.ndarray) or isinstance(port.power, list):
+                    sweep_list.append(name, port.type, port.power, port.sweep_index)
+                    
+            if port.type == 2:
+                if isinstance(port.current, np.ndarray) or isinstance(port.current, list):
+                    sweep_list.append(name, port.type, port.current, port.sweep_index)
 
-
+        return sweep_list, vna_sweep, lo_sweep
+    
+    
+    def update_parameters(self, update_command):
+        for command in update_command:
+            name, attr, value = command
+            

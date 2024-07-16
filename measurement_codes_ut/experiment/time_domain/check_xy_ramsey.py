@@ -83,16 +83,20 @@ class CheckXYRamsey(object):
 
         tdm.port['readout'].frequency = readout_freq
 
-        tdm.port['qubit'].frequency = qubit_freq + self.hand_detune
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = (qubit_freq+self.hand_detune)/1e9
+        else:
+            tdm.port['qubit'].frequency = qubit_freq + self.hand_detune
+
 
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
 
         num_sample = 50
-        delay_range = np.arange(
+        delay_range = np.linspace(
             self.min_duration/2, self.max_duration/2, num_sample, dtype=int) * 2
         delay_range = np.array(sorted(set(delay_range)))
         self.len_data = len(delay_range)
-        phase_list = [np.pi, np.pi/2]
+        phase_list = [np.pi, -np.pi/2]
 
         half_pi_pulse_power = 0.5 * note.pi_pulse_power
 
@@ -142,7 +146,7 @@ class CheckXYRamsey(object):
         
         self.data_label = dataset.path.split("/")[-1][27:]
 
-        plt.figure(figsize=(15, 5))
+        plt.figure(figsize=(11,3))
         plt.suptitle(f"{self.data_label}")
         plt.subplot(131)
         plt.plot(xdata[:, 0], xdata[:, 1], ".-", label="X")
@@ -169,7 +173,7 @@ class CheckXYRamsey(object):
             plt.savefig(f"{savepath}/{self.data_label}_1.png")
         plt.show()
 
-        plt.figure(figsize=(10, 5))
+        plt.figure(figsize=(6,3))
         plt.suptitle(f"{self.data_label}")
         plt.subplot(121)
         plt.plot(tdata, paulix, label="X")
@@ -190,8 +194,8 @@ class CheckXYRamsey(object):
 
         plt.plot(freq, powerx, ".-")
         plt.plot(freq, powery, ".-")
-        plt.xlabel("Detuning (Hz)", fontsize=16)
-        plt.ylabel("Power spectrum ($\mathrm{V}^2$)",  fontsize=16)
+        plt.xlabel("Detuning (Hz)")
+        plt.ylabel("Power spectrum ($\\mathrm{V}^2$)")
         plt.yscale("log")
         plt.xscale("log")
         plt.grid(which='major', color='black', linestyle='-', alpha=0.1)

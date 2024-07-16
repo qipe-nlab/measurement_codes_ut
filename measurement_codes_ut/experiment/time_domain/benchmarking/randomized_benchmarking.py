@@ -83,7 +83,10 @@ class RandomizedBenchmarking:
 
         tdm.port['readout'].frequency = note.cavity_readout_frequency
         tdm.port['readout'].window = note.cavity_readout_window_coefficient
-        tdm.port['qubit'].frequency = note.qubit_dressed_frequency
+        if tdm.lo['qubit'] is None:
+            qubit_port.if_freq = note.qubit_dressed_frequency/1e9
+        else:
+            tdm.port['qubit'].frequency = note.qubit_dressed_frequency
         tdm.set_acquisition_mode(averaging_waveform=True, averaging_shot=True)
         tdm.set_shots(self.num_shot)
         tdm.set_repetition_margin(self.repetition_margin)
@@ -194,7 +197,7 @@ class RandomizedBenchmarking:
             min(self.length_list), max(self.length_list), 10001)
         y_fit = exp_decay(length_fit, *popt)
 
-        plt.figure(figsize=(8, 6))
+        plt.figure()
         self.data_label = dataset.path.split("/")[-1][27:]
         plt.title(f"{self.data_label}")
         plt.errorbar(self.length_list, response_mean, yerr=response_std,
