@@ -6,12 +6,11 @@ logger = getLogger(__name__)
 class SessionManager(object):
     """Manager class for keeping experimental session
 
-    This server keeps description of experiment and provide
-    ServerWrapper object of data vault and registry pointing at appropriate directory.
+    This server keeps description of experiment 
     """
 
     def __init__(self,
-                 cooling_down_id: str, experiment_username: str, sample_name: str,
+                 cooling_down_id: str, experiment_username: str, sample_name: str, save_path: str
                  ) -> None:
         """Initializer of session manager
 
@@ -19,7 +18,7 @@ class SessionManager(object):
 
         Args:
             cooling_down_id (str): Identifier of current cooling down
-            experiment_username (str): User name used for registry and data vault
+            experiment_username (str): User name
         Raises:
             ValueError: experiment_username is empty
         """
@@ -29,7 +28,10 @@ class SessionManager(object):
 
         self.cooling_down_id = cooling_down_id
         self.experiment_username = experiment_username
-        self.package_name = sample_name
+        self.sample_name = sample_name
+        if save_path[-1] != "/" and save_path[-2:] != "\\":
+            save_path += "/"
+        self.save_path = save_path + f"{self.cooling_down_id}/{self.package_name}/"
 
 
     def __repr__(self) -> str:
@@ -40,6 +42,6 @@ class SessionManager(object):
         """
         s = "Session\n"
         s += "* coolingdown {}\n".format(self.cooling_down_id)
-        s += "* username    {}\n".format(self.experiment_username)
-        s += "* package     {}\n".format(self.package_name)
+        s += "* user        {}\n".format(self.experiment_username)
+        s += "* sample      {}\n".format(self.sample_name)
         return s

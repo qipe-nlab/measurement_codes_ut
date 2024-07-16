@@ -11,22 +11,23 @@ from qcodes_drivers.HVI_Trigger import HVI_Trigger
 from qcodes_drivers.iq_corrector import IQCorrector
 from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
-from qcodes_drivers.APMSYN22 import APMSYN22
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from qcodes_drivers.E4407B import E4407B
-from qcodes_drivers.M9804A import M9804A_LO
-from qcodes_drivers.HS900xB import HS900xB
-from qcodes_contrib_drivers.drivers.Vaunix.LDA import Vaunix_LDA
-from qcodes_contrib_drivers.drivers.Vaunix.LDA_eth import Vaunix_LDA_Eth as LDA_eth
+from ...drivers.HS900xB import HS900xB
+from ...drivers.APMSYN22 import APMSYN22
+from ...drivers.LDA import Vaunix_LDA
+from ...drivers.LDA_eth import Vaunix_LDA_Eth as LDA_eth
+from ...drivers.SGS100A import SGS100A
+from ...drivers.Valon501x import Valon501x
 
 from sequence_parser import Port, Sequence
 from sequence_parser.iq_port import IQPort
 
 import matplotlib.pyplot as plt
 
-from measurement_codes_ut.measurement_tool import Session
+from .. import Session
 from qcodes_drivers.iq_corrector import IQCorrector
-from qcodes.instrument.base import Instrument, InstrumentBase
+from qcodes.instrument.base import Instrument
 from .port_manager import PortManager
 
 logger = getLogger(__name__)
@@ -35,7 +36,7 @@ logger = getLogger(__name__)
 class InstrumentManagerBase(object):
     """Insturment management class for timedomain measurement"""
 
-    def __init__(self, session: Session, trigger_address: str, save_path: str) -> None:
+    def __init__(self, session: Session, trigger_address: str) -> None:
         """Constructor of time domain measurement
 
         Args:
@@ -54,9 +55,8 @@ class InstrumentManagerBase(object):
         self.averaging_waveform = False
 
         self.tags = ["TD", session.cooling_down_id, session.package_name]
-        if save_path[-1] != "/" and save_path[-2:] != "\\":
-            save_path += "/"
-        self.save_path = save_path + f"{session.cooling_down_id}/{session.package_name}/"
+        
+        self.save_path = session.save_path
 
         self.trigger_address = trigger_address
         self.repetition_margin = 50000
@@ -140,10 +140,14 @@ class InstrumentManagerBase(object):
                     lo = SGS100A(f"lo_{self.lo_id}", lo_address)
                 elif "AP" in model:
                     lo = APMSYN22(f"lo_{self.lo_id}", lo_address)
-                elif "M98" in model:
-                    lo = M9804A_LO(f"lo_{self.lo_id}", lo_address)
-                    lo.sweep_mode('continuous')
-                    lo.trigger_source("manual")
+                elif "Valon" in model:
+                    lo = Valon501x(f"lo_{self.lo_id}", lo_address)
+                else:
+                    raise ValueError(f"LO {model} is not supported.")
+                # elif "M98" in model:
+                #     lo = M9804A_LO(f"lo_{self.lo_id}", lo_address)
+                #     lo.sweep_mode('continuous')
+                #     lo.trigger_source("manual")
 
                 lo.output(False)
                 lo.power(lo_power)

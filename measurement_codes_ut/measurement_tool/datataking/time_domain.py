@@ -7,25 +7,12 @@ import copy
 import os
 import qcodes as qc
 import time
-from qcodes_drivers.E82x7 import E82x7
-from qcodes_drivers.N51x1 import N51x1
-from qcodes_drivers.HVI_Trigger import HVI_Trigger
-from qcodes_drivers.iq_corrector import IQCorrector
-from qcodes_drivers.M3102A import M3102A
-from qcodes_drivers.M3202A import M3202A
 from sequence_parser import Sequence, Variable, Variables
 from tqdm.notebook import tqdm
-from sequence_parser.iq_port import IQPort
-from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from .instrument_manager import InstrumentManagerBase
-from plottr.data.datadict_storage import DataDict, DDH5Writer, datadict_from_hdf5
-from .port_manager import PortManager
-
-
-import matplotlib.pyplot as plt
-
-from measurement_codes_ut.measurement_tool import Session
-from measurement_codes_ut.measurement_tool.wrapper import Dataset
+from plottr.data.datadict_storage import DataDict, DDH5Writer
+from .. import Session
+from ..wrapper import Dataset
 
 logger = getLogger(__name__)
 
@@ -455,10 +442,13 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
     def set_wiring_note(self, wiring_info):
         self.wiring_info = wiring_info
 
-    def load_sequence(self, sequence: Sequence, cycles: int, add_delay=True):
+    def load_sequence(self, sequence: Sequence, cycles: int, add_delay=False):
         rng = np.random.default_rng()
         sequence.compile()
-        self.seq_len = int(sequence.max_waveform_length)
+        try:
+            self.seq_len = int(sequence.max_waveform_length)
+        except:
+            self.seq_len = int(sequence.max_waveform_lenght)
         # print(self.seq_len)
         if add_delay:
             if self.seq_len < 2040:
