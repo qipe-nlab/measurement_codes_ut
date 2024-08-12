@@ -13,12 +13,12 @@ from qcodes_drivers.M3102A import M3102A
 from qcodes_drivers.M3202A import M3202A
 from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from qcodes_drivers.E4407B import E4407B
-from ...drivers.HS900xB import HS900xB
-from ...drivers.APMSYN22 import APMSYN22
-from ...drivers.LDA import Vaunix_LDA
-from ...drivers.LDA_eth import Vaunix_LDA_Eth as LDA_eth
-from ...drivers.SGS100A import SGS100A
-from ...drivers.Valon501x import Valon501x
+from ..drivers.HS900xB import HS900xB
+from ..drivers.APMSYN22 import APMSYN22
+from ..drivers.LDA import Vaunix_LDA
+from ..drivers.LDA_eth import Vaunix_LDA_Eth as LDA_eth
+from ..drivers.SGS100A import SGS100A
+from ..drivers.Valon501x import Valon501x
 
 from sequence_parser import Port, Sequence
 from sequence_parser.iq_port import IQPort
@@ -54,7 +54,7 @@ class InstrumentManagerBase(object):
         self.averaging_shot = False
         self.averaging_waveform = False
 
-        self.tags = ["TD", session.cooling_down_id, session.package_name]
+        self.tags = ["TD", session.cooling_down_id, session.sample_name]
         
         self.save_path = session.save_path
 

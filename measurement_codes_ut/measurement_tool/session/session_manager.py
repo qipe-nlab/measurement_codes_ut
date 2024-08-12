@@ -31,7 +31,7 @@ class SessionManager(object):
         self.sample_name = sample_name
         if save_path[-1] != "/" and save_path[-2:] != "\\":
             save_path += "/"
-        self.save_path = save_path + f"{self.cooling_down_id}/{self.package_name}/"
+        self.save_path = save_path + f"{self.cooling_down_id}/{self.sample_name}/"
 
 
     def __repr__(self) -> str:

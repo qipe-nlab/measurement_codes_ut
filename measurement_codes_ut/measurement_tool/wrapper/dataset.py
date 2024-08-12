@@ -2,6 +2,7 @@ from typing import Union, List, Optional
 
 import numpy as np
 import os
+import shutil
 
 from . import AttributeDict
 from .. import Session
@@ -28,6 +29,7 @@ class Dataset(object):
         
         """
         save_path = self.session.save_path + dataset_subpath
+        self.save_path = save_path
         data_all = []
         files = os.listdir(save_path)
         for date in files:
@@ -53,6 +55,22 @@ class Dataset(object):
             if log:
                 print(f"Load dataset id.{dataset_id} from {save_path}.")
 
+    def delete(self):
+        assert hasattr(self, "number")
+        data_all = []
+        files = os.listdir(self.save_path)
+        for date in files:
+            date = date + "/"
+            for f in os.listdir(self.save_path+date):
+                data_all.append(self.save_path+date+f)
+        
+        if self.number != len(data_all) - 1:
+            raise ValueError(f"Only the latest data can be deleted to avoid index mismatch.")
+        else:
+            # print(data_all)
+            shutil.rmtree(data_all[self.number])
+            
+    
     def __repr__(self) -> str:
         """Return string representation of Dataset
 
