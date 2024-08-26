@@ -633,7 +633,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             writer.backup_file([__file__])
         else:
             writer.backup_file([exp_file, __file__])
-        writer.save_text("wiring.md", self.wiring_info)
+        save_text = self.wiring_info + "\n\n" + str(self)
+        writer.save_text("wiring.md", save_text)
         writer.save_dict("station_snapshot.json", self.station.snapshot())
 
     def show_sweep_plan(self, show_all=False, index=[]):

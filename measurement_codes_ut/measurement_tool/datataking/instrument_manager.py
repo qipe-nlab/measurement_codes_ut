@@ -15,6 +15,7 @@ from qcodes.instrument_drivers.yokogawa.GS200 import GS200
 from qcodes_drivers.E4407B import E4407B
 from ..drivers.HS900xB import HS900xB
 from ..drivers.APMSYN22 import APMSYN22
+from ..drivers.ADCMT6541 import ADCMT6541
 from ..drivers.LDA import Vaunix_LDA
 from ..drivers.LDA_eth import Vaunix_LDA_Eth as LDA_eth
 from ..drivers.SGS100A import SGS100A
@@ -76,7 +77,7 @@ class InstrumentManagerBase(object):
         print("done")
 
     def add_misc_control_line(self, port_name: str,
-                              lo_address: str,
+                              lo_address: str|tuple,
                               lo_power: int,
                               awg_chasis: int,
                               awg_slot: int,
@@ -157,7 +158,7 @@ class InstrumentManagerBase(object):
                 self.station.add_component(lo)
                 self.lo_id += 1
             else:
-                print(f"LO {lo_address} already allocated.")
+                print(f"LO {lo_address} is already allocated.")
         else:
                 self.lo[port_name] = None
                 self.lo_address[self.lo_id] = lo_address
@@ -311,26 +312,60 @@ class InstrumentManagerBase(object):
 
     def add_current_source_bias_line(self, 
                                      port_name: str,
-                                     current_source_address: str) -> None:
+                                     current_source_address: str|tuple) -> None:
         """add current source line
         Args:
             port_name (str): port name
             current_source_adress (str): IP address of current source like "TCPIP0::192.168.100.8::inst0::INSTR"
         """
-        self.current_info['model'].append("GS200")
-        self.current_info['address'].append(current_source_address)
-        self.current_info['channel'].append("")
-        self.current_info['port'].append(port_name)
-        if port_name not in self.current_source:
+        
+        if port_name in self.current_source:
+            raise ValueError(f"Port name {port_name} is already used.")
+        
+        if isinstance(current_source_address, tuple):
+            addr, channel = current_source_address
+            
+            if addr not in self.current_source_address.values():
+                cs_base = ADCMT6541(f"current_source_{self.current_source_id}", addr)
+                model = cs_base.IDN()['model']
+                self.current_info['model'].append("ADC6541")
+                self.current_info['address'].append(addr)
+                self.current_info['channel'].append(f"ch{channel}")
+                self.current_info['port'].append(port_name)
+                self.current_source_shared[addr] = cs_base
+            else:
+                if f"ch{channel}" not in self.current_info['channel']:
+                    cs_base = self.current_source_shared[addr]
+                    model = cs_base.IDN()['model']
+                    self.current_info['model'].append("ADC6541")
+                    self.current_info['address'].append(addr)
+                    self.current_info['channel'].append(f"ch{channel}")
+                    self.current_info['port'].append(port_name)
+                else:
+                    print(
+                        f"Current source ADC6541 ch{channel} is already allocated.")
+
+            ref_dict = {1: cs_base.ch1, 2: cs_base.ch2, 3: cs_base.ch3, 4: cs_base.ch4}
+            current_source = ref_dict[channel]
+            # current_source.output('off')
+            self.current_source[port_name] = current_source
+            self.current_source_address[self.current_source_id] = addr
+            self.station.add_component(current_source)
+            self.current_source_id += 1
+
+        else:
+            self.current_info['model'].append("GS200")
+            self.current_info['address'].append(current_source_address)
+            self.current_info['channel'].append("")
+            self.current_info['port'].append(port_name)
             current_source = GS200(
                 port_name+"_current_source", current_source_address)
             # current_source.ramp_current(0e-6, step=1e-7, delay=0)
             self.current_source[port_name] = current_source
-            # self.station.add_component(current_source)
-
-        else:
-            print(
-                f"Current source {current_source_address} already allocated.")
+                # self.station.add_component(current_source)
+        
+        if current_source.source_mode() != 'CURR':
+            current_source._set_source_mode('CURR')
             
 
     def add_cross_resonance_line(self, port_name: str,
@@ -471,11 +506,27 @@ class InstrumentManagerBase(object):
         self.num_shot = num_shot
 
     def __repr__(self):
+        type_len = 20
+        name_len = 20
+        addr_len = 50
+        chan_len = 30
+        port_len = 15
+        freq_len = 20
+        iffr_len = 20
+        curr_len = 20
+        outp_len = 10
+        atte_len = 20
+        work_len = 20
         s = ""
         s += "*** Allocated devices and channel assignemnt ***\n"
-        s += "{:20} {:20} {:40} {:30} {:15}\n".format(
-            "Device type", "Device name", "Device address", "Channel", "Port")
-        s += "-" * (20 + 20 + 40 + 30 + 15) + "\n"
+        s += "{:{}} {:{}} {:{}} {:{}} {:{}}\n".format(
+            "Device type", type_len,
+            "Device name", name_len,
+            "Device address", addr_len,
+            "Channel", chan_len,
+            "Port", port_len
+        )
+        s += "-" * (type_len + name_len + addr_len + chan_len + port_len) + "\n"
         for _ in range(len(self.lo_info['model'])):
             device_type = "LO"
             device_name = self.lo_info['model'][_]
@@ -483,7 +534,7 @@ class InstrumentManagerBase(object):
             channel = self.lo_info['channel'][_]
             dep_port = self.lo_info['port'][_]
 
-            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
         for _ in range(len(self.awg_info['model'])):
             device_type = "AWG"
@@ -492,7 +543,7 @@ class InstrumentManagerBase(object):
             channel = self.awg_info['channel'][_]
             dep_port = self.awg_info['port'][_]
 
-            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
         for _ in range(len(self.dig_info['model'])):
             device_type = "Digitizer"
@@ -501,7 +552,7 @@ class InstrumentManagerBase(object):
             channel = self.dig_info['channel'][_]
             dep_port = self.dig_info['port'][_]
 
-            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
         for _ in range(len(self.current_info['model'])):
             device_type = "Current source"
@@ -510,7 +561,7 @@ class InstrumentManagerBase(object):
             channel = self.current_info['channel'][_]
             dep_port = self.current_info['port'][_]
 
-            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
         for key, device in self.vatt.items():
             device_type = "LDA"
@@ -519,7 +570,7 @@ class InstrumentManagerBase(object):
             channel = f"ch{device.channel_number}"
             dep_port = key
 
-            s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
         device_type = "HVI trigger"
         device_name = self.hvi_trigger.IDN()['model']
@@ -527,44 +578,45 @@ class InstrumentManagerBase(object):
         channel = ""
         dep_port = ""
 
-        s += f"{device_type:20} {device_name:20} {address:40} {channel:30} {dep_port:15}\n"
+        s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
+
 
         s += "\n\n*** Port status ***\n"
-        s += "{:20} {:20} {:20}\n".format(
-            "Port name", "Frequency (GHz)", "IF frequency (MHz)")
-        s += "-" * (20 + 20 + 20) + "\n"
+        s += "{:{}} {:{}} {:{}}\n".format(
+            "Port name", port_len, "Frequency (GHz)", freq_len, "IF frequency (MHz)", iffr_len)
+        s += "-" * (port_len + freq_len + iffr_len) + "\n"
         for key, value in self.port.items():
             name = key
             freq = value.frequency*1e-9
             if_freq = value.port.if_freq*1e3
 
-            s += f"{name:<20} {freq:<20.6f} {if_freq:<20.1f}\n"
+            s += f"{name:<{port_len}} {freq:<{freq_len}.6f} {if_freq:<{iffr_len}.1f}\n"
 
 
         if len(self.current_source) > 0:
             s += "\n\n*** Current source status ***\n"
-            s += "{:20} {:20} {:20}\n".format(
-                "Port name", "Current (mA)", "Output")
-            s += "-" * (20 + 20 + 20) + "\n"
+            s += "{:{}} {:{}} {:{}}\n".format(
+                "Port name", port_len, "Current (mA)", curr_len, "Output", outp_len)
+            s += "-" * (port_len + curr_len + outp_len) + "\n"
             for key, value in self.current_source.items():
                 name = key
                 cur = value.current()*1e3
                 if_output = value.output()
 
-                s += f"{name:<20} {cur:<20.6f} {if_output:<20}\n"
+                s += f"{name:<{port_len}} {cur:<{curr_len}.6f} {if_output:<{outp_len}}\n"
 
                 
         if len(self.vatt) > 0:
             s += "\n\n*** LDA status ***\n"
-            s += "{:20} {:20} {:30}\n".format(
-                "Port name", "Attenuation (dB)", "Working frequency (GHz)")
-            s += "-" * (20 + 20 + 30) + "\n"
+            s += "{:{}} {:{}} {:{}}\n".format(
+                "Port name", port_len, "Attenuation (dB)", atte_len, "Working frequency (GHz)", work_len)
+            s += "-" * (port_len + atte_len + work_len) + "\n"
             for key, value in self.vatt.items():
                 name = key
                 att = value.attenuation()
                 fw = value.working_frequency() * 1e-9
 
-                s += f"{name:<20} {att:<20.1f} {fw:<20.4f}\n"
+                s += f"{name:<{port_len}} {att:<{atte_len}.1f} {fw:<{work_len}.4f}\n"
 
         return s
     
@@ -621,6 +673,8 @@ class InstrumentManagerBase(object):
         self.digitizer = {}
         self.dig_info = {"model": [], "address": [], "channel": [], "port": []}
         self.current_source = {}
+        self.current_source_shared = {}
+        self.current_source_address = {}
         self.current_info = {"model": [],
                              "address": [], "channel": [], "port": []}
 
@@ -633,6 +687,7 @@ class InstrumentManagerBase(object):
         self.dig_id = 0
         self.awg_id_dict = {}
         self.awg_ch = {}
+        self.current_source_id = 0
         
         self.vatt = {}
         self.vatt_info = {}
