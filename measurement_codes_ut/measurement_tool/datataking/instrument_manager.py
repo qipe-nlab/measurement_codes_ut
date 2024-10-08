@@ -1,6 +1,5 @@
-import numpy as np
 from logging import getLogger
-import time
+from typing import Union
 
 import numpy as np
 import qcodes as qc
@@ -77,7 +76,7 @@ class InstrumentManagerBase(object):
         print("done")
 
     def add_misc_control_line(self, port_name: str,
-                              lo_address: str|tuple,
+                              lo_address: Union[str,tuple],
                               lo_power: int,
                               awg_chasis: int,
                               awg_slot: int,
@@ -312,7 +311,7 @@ class InstrumentManagerBase(object):
 
     def add_current_source_bias_line(self, 
                                      port_name: str,
-                                     current_source_address: str|tuple) -> None:
+                                     current_source_address: Union[str,tuple]) -> None:
         """add current source line
         Args:
             port_name (str): port name
@@ -448,7 +447,8 @@ class InstrumentManagerBase(object):
 
     def add_variable_attenuator(self, name: str,
                        address: str,
-                       channel: int) -> None:
+                       channel: int,
+                       dll_path: str) -> None:
         """method to add Vaunix variable attenuator 
 
         Args:
@@ -456,10 +456,9 @@ class InstrumentManagerBase(object):
             address (str): IP address of the instrument
             channel (int): channel you use
         """
-        vaunix_dll = r"F:\vaunix_dll"
         # vatt = LDA_eth('lda', address, dll_path=vaunix_dll, num_channels=4)
         if address not in self.vatt_info:
-            vatt = LDA_eth(f'lda_{self.vatt_id}', address, dll_path=vaunix_dll, num_channels=4)
+            vatt = LDA_eth(f'lda_{self.vatt_id}', address, dll_path=dll_path, num_channels=4)
             self.station.add_component(vatt)
             self.vatt_info[address] = vatt
             self.vatt_id += 1
@@ -572,13 +571,17 @@ class InstrumentManagerBase(object):
 
             s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
 
-        device_type = "HVI trigger"
-        device_name = self.hvi_trigger.IDN()['model']
-        address = self.trigger_address
-        channel = ""
-        dep_port = ""
+        try:
+            device_type = "HVI trigger"
+            device_name = self.hvi_trigger.IDN()['model']
+            address = self.trigger_address
+            channel = ""
+            dep_port = ""
 
-        s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
+            s += f"{device_type:{type_len}} {device_name:{name_len}} {address:{addr_len}} {channel:{chan_len}} {dep_port:{port_len}}\n"
+        
+        except:
+            pass
 
 
         s += "\n\n*** Port status ***\n"

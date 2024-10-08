@@ -16,7 +16,7 @@ from qcodes_drivers.N5222A import N5222A
 from qcodes_drivers.M9804A import M9804A
 from qcodes_drivers.E5071C import E5071C
 from qcodes_drivers.APMSYN22 import APMSYN22
-from qcodes_contrib_drivers.drivers.Vaunix.LDA_eth import Vaunix_LDA_Eth as LDA_eth
+# from qcodes_contrib_drivers.drivers.Vaunix.LDA_eth import Vaunix_LDA_Eth as LDA_eth
 
 from .port_manager_cw import PortManager
 from qcodes.instrument.base import Instrument, InstrumentBase

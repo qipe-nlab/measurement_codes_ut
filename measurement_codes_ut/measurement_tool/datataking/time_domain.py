@@ -29,8 +29,8 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         """
         # print("Creating a new insturment management class for timedomain measurement...", end="")
         super().__init__(session, trigger_address)
-        self.sequence = None
-        self.variables = None
+        # self.sequence = None
+        # self.variables = None
 
     def take_data(self, 
                   dataset_name: str, 
@@ -55,8 +55,11 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         Returns:
             Dataset: taken dataset
         """
-        seq = self.sequence
-        variables = self.variables
+        try:
+            seq = self.sequence
+            variables = self.variables
+        except:
+            raise ValueError("Sequence and/or variables not defined.")
 
         flag = False
         for key, port in self.port.items():
@@ -134,7 +137,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             print(f"Experiment id. {num_files} completed.")
 
             dataset = Dataset(self.session)
-            dataset.load(num_files, dataset_subpath, log=False)
+            dataset.load(num_files, dataset_subpath + "/", log=False)
             data = dataset.data
             
             if not save:
@@ -187,7 +190,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         lo_sweep_value = list(lo_sweep_dict.values())[0]
 
         
-        var_dict[lo_sweep_key+"_LO_frequency"] = dict(unit='Hz')
+        var_dict[lo_sweep_key+"_frequency"] = dict(unit='Hz')
         for port in seq.port_list:
             if "acquire" in port.name:
                 var_dict[port.name] = dict(axes=list(var_dict.keys()))
@@ -219,7 +222,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                         # seq.draw()
                         raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
                         write_dict = {key:seq.variable_dict[key][0].value for key in variables.variable_name_list}
-                        write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                        write_dict[lo_sweep_key+"_frequency"] = lo
                         for port in seq.port_list:
                             if "acquire" in port.name:
                                 write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
@@ -230,7 +233,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                     self.port[lo_sweep_key].set_frequency(lo)
                     raw_data = self.run(seq, as_complex=as_complex, demodulate=demodulate)
                     write_dict = {}
-                    write_dict[lo_sweep_key+"_LO_frequency"] = lo
+                    write_dict[lo_sweep_key+"_frequency"] = lo
                     for port in seq.port_list:
                         if "acquire" in port.name:
                             write_dict[port.name] = raw_data[str(port.name).replace("_acquire", "")]
@@ -240,7 +243,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
         print(f"Experiment id. {num_files} completed.")
 
         dataset = Dataset(self.session)
-        dataset.load(num_files, dataset_subpath, log=False)
+        dataset.load(num_files, dataset_subpath + "/", log=False)
         if not save:
             dataset.delete()
 
@@ -290,7 +293,7 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
                 
         print(f"Experiment id. {num_files} completed.")
         dataset = Dataset(self.session)
-        dataset.load(num_files, dataset_subpath, log=False)
+        dataset.load(num_files, dataset_subpath + "/", log=False)
         data = dataset.data
         if not save:
             dataset.delete()
@@ -633,7 +636,10 @@ class TimeDomainInstrumentManager(InstrumentManagerBase):
             writer.backup_file([__file__])
         else:
             writer.backup_file([exp_file, __file__])
-        save_text = self.wiring_info + "\n\n" + str(self)
+        try:
+            save_text = self.wiring_info + "\n\n" + str(self)
+        except TypeError:
+            save_text = self.wiring_info
         writer.save_text("wiring.md", save_text)
         writer.save_dict("station_snapshot.json", self.station.snapshot())
 
